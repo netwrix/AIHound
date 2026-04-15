@@ -1,0 +1,2 @@
+# Optional: pretty CLI output
+rich>=13.0
