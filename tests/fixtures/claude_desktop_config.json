@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "azure-devops": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/azure-devops-mcp"],
+      "env": {
+        "ADO_MCP_AUTH_TOKEN": "FAKE_ADO_TOKEN_abcdef1234567890abcdef",
+        "ADO_ORG": "myorg"
+      }
+    },
+    "github-safe": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/github-mcp"],
+      "env": {
+        "GITHUB_TOKEN": "${GITHUB_TOKEN}"
+      }
+    }
+  }
+}

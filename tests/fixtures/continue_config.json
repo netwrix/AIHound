@@ -1,0 +1,16 @@
+{
+  "models": [
+    {
+      "title": "Claude 3.5 Sonnet",
+      "provider": "anthropic",
+      "model": "claude-3-5-sonnet-20241022",
+      "apiKey": "sk-ant-FAKE_KEY_FOR_TESTING_1234567890"
+    },
+    {
+      "title": "GPT-4",
+      "provider": "openai",
+      "model": "gpt-4",
+      "apiKey": "${OPENAI_API_KEY}"
+    }
+  ]
+}
