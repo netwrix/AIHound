@@ -35,6 +35,7 @@ AIHound doesn't just look for API keys. It scans for:
 | **Cline** | `cline_mcp_settings.json` (plaintext MCP creds) |
 | **Windsurf** | `~/.codeium/windsurf/` config and MCP settings |
 | **ChatGPT Desktop** | App data directories (macOS & Windows) |
+| **OpenClaw** | `~/.openclaw/` auth profiles, channel creds, gateway tokens, `.env`, legacy OAuth |
 | **Ollama** | `~/.ollama/`, env vars, systemd service, network exposure (port 11434) |
 | **LM Studio** | App config dirs, HF tokens, `.env` files, network exposure (port 1234) |
 | **Amazon Q / AWS** | `~/.aws/credentials`, SSO cache tokens |
@@ -54,7 +55,7 @@ AIHound doesn't just look for API keys. It scans for:
 
 ```bash
 # Clone the repo
-git clone https://github.com/dfirdeferred/aihound.git
+git clone https://github.com/yourusername/aihound.git
 cd aihound
 
 # Run directly (zero dependencies for core scanning)
