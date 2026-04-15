@@ -51,9 +51,10 @@ AIHound doesn't just look for API keys. It scans for:
 | **Windows** | Full support (includes Credential Manager) |
 | **WSL** | Full support — scans **both** Linux paths and Windows paths via `/mnt/c/` |
 
-## Installation
+---
 
-# AIHound Build & Run Guide
+# Installation
+### **Precompiled .exe version can be found at [Here](https://github.com/netwrix/AIHound/tree/main/Other%20Versions/pyinstaller/dist)**
 
 AIHound can be run three ways: from Python source, as a compiled Go binary, or as a standalone Windows executable (via PyInstaller).
 
