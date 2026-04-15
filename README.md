@@ -54,7 +54,7 @@ AIHound doesn't just look for API keys. It scans for:
 ---
 
 # Installation
-### **Precompiled .exe version can be found at [Here](https://github.com/netwrix/AIHound/tree/main/Other%20Versions/pyinstaller/dist)**
+### **Precompiled .exe version can be found [Here](https://github.com/netwrix/AIHound/tree/main/Other%20Versions/pyinstaller/dist)**
 
 AIHound can be run three ways: from Python source, as a compiled Go binary, or as a standalone Windows executable (via PyInstaller).
 
@@ -68,7 +68,16 @@ AIHound can be run three ways: from Python source, as a compiled Go binary, or a
 
 ### Install
 ```bash
+# Clone the repo
+git clone https://github.com/yourusername/aihound.git
+cd aihound
+
+# Run directly (zero dependencies for core scanning)
+python3 -m aihound
+
+# Optional: install rich for colored table output
 pip install -r requirements.txt
+pip install rich
 ```
 
 ### Run
