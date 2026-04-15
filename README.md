@@ -69,7 +69,7 @@ AIHound can be run three ways: from Python source, as a compiled Go binary, or a
 ### Install
 ```bash
 # Clone the repo
-git clone https://github.com/yourusername/aihound.git
+git clone https://github.com/netwrix/aihound.git
 cd aihound
 
 # Run directly (zero dependencies for core scanning)
