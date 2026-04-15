@@ -19,6 +19,34 @@ COLORS = {
 }
 RESET = "\033[0m"
 BOLD = "\033[1m"
+BLUE = "\033[94m"
+YELLOW = "\033[93m"
+WHITE = "\033[97m"
+DIM = "\033[2m"
+
+_AIHOUND_ART = [
+    r"    ___    ______  __                      __",
+    r"   /   |  /  _/ / / /___  __  ______  ____/ /",
+    r"  / /| |  / // /_/ / __ \/ / / / __ \/ __  / ",
+    r" / ___ |_/ // __  / /_/ / /_/ / / / / /_/ /  ",
+    r"/_/  |_/___/_/ /_/\____/\__,_/_/ /_/\__,_/   ",
+]
+
+_DOG_ART = [
+    r"    / \__",
+    r"   (    @\___",
+    r"   /         O",
+    r"  /   (_____/",
+    r" /_____/   U",
+]
+
+_NETWRIX_ART = [
+    "+-+-+-+-+-+-+-+",
+    "|N|e|t|w|r|i|x|",
+    "+-+-+-+-+-+-+-+",
+]
+
+_DISCLAIMER = "For authorized use only. Use on systems you own or have permission to test."
 
 
 def _truncate(s: str, width: int) -> str:
@@ -28,13 +56,40 @@ def _truncate(s: str, width: int) -> str:
 
 
 def print_banner(file: TextIO = sys.stdout, no_color: bool = False) -> None:
-    b = BOLD if not no_color else ""
+    bl = BLUE if not no_color else ""
+    bo = BOLD if not no_color else ""
+    yl = YELLOW if not no_color else ""
+    wh = WHITE if not no_color else ""
+    dm = DIM if not no_color else ""
     r = RESET if not no_color else ""
-    print(f"""
-{b}╔══════════════════════════════════════════════════════════════╗
-║          AIHound - AI Credential & Secrets Scanner           ║
-╚══════════════════════════════════════════════════════════════╝{r}
-""", file=file)
+
+    max_ah = max(len(line) for line in _AIHOUND_ART)
+
+    lines = []
+    for line in _NETWRIX_ART:
+        lines.append(f"{bl}{line}{r}")
+
+    for i in range(len(_AIHOUND_ART)):
+        ah = _AIHOUND_ART[i]
+        dg = _DOG_ART[i] if i < len(_DOG_ART) else ""
+        lines.append(f"{bo}{ah:<{max_ah}}{r}   {yl}{dg}{r}")
+
+    lines.append("")
+    subtitle = "  AI Credential & Secrets Scanner"
+    author = "Written by DFIRDeferred"
+    lines.append(f"{wh}{subtitle}{r}{'':>6}{dm}{author}{r}")
+    rd = "\033[91m" if not no_color else ""
+    lines.append(f"  {rd}{_DISCLAIMER}{r}")
+
+    try:
+        print("\n".join(lines), file=file)
+    except UnicodeEncodeError:
+        # Fallback: strip ANSI codes and print plain
+        import re
+        plain = "\n".join(lines)
+        plain = re.sub(r"\033\[[0-9;]*m", "", plain)
+        print(plain, file=file)
+    print(file=file)
 
 
 def print_results(
