@@ -45,6 +45,15 @@ func ParseMCPConfig(data map[string]interface{}, sourcePath string, toolName str
 
 	perms := GetFilePermissions(sourcePath)
 	owner := GetFileOwner(sourcePath)
+	fileMtime := GetFileMtime(sourcePath)
+	mtime := GetFileMtimeTime(sourcePath)
+
+	appendStalenessNote := func(notes []string) []string {
+		if !mtime.IsZero() {
+			notes = append(notes, "File last modified: "+DescribeStaleness(mtime))
+		}
+		return notes
+	}
 
 	for serverName, serverConfigRaw := range mcpServers {
 		serverConfig, ok := serverConfigRaw.(map[string]interface{})
@@ -62,6 +71,11 @@ func ParseMCPConfig(data map[string]interface{}, sourcePath string, toolName str
 					}
 
 					if isEnvVarReference(value) {
+						notes := []string{
+							fmt.Sprintf("MCP server: %s", serverName),
+							"References environment variable (not inline secret)",
+						}
+						notes = appendStalenessNote(notes)
 						findings = append(findings, CredentialFinding{
 							ToolName:       toolName,
 							CredentialType: fmt.Sprintf("mcp_env_ref:%s", key),
@@ -70,12 +84,16 @@ func ParseMCPConfig(data map[string]interface{}, sourcePath string, toolName str
 							Exists:         true,
 							RiskLevel:      RiskInfo,
 							ValuePreview:   value,
-							Notes: []string{
-								fmt.Sprintf("MCP server: %s", serverName),
-								"References environment variable (not inline secret)",
-							},
+							FileModified:   fileMtime,
+							Remediation:    "Verify env var is set in a secure environment, not committed to source",
+							Notes:          notes,
 						})
 					} else if looksLikeSecretKey(key) || looksLikeSecretValue(value) {
+						notes := []string{
+							fmt.Sprintf("MCP server: %s", serverName),
+							"Inline secret in config",
+						}
+						notes = appendStalenessNote(notes)
 						findings = append(findings, CredentialFinding{
 							ToolName:        toolName,
 							CredentialType:  fmt.Sprintf("mcp_env:%s", key),
@@ -87,10 +105,9 @@ func ParseMCPConfig(data map[string]interface{}, sourcePath string, toolName str
 							RawValue:        rawValueIf(value, showSecrets),
 							FilePermissions: perms,
 							FileOwner:       owner,
-							Notes: []string{
-								fmt.Sprintf("MCP server: %s", serverName),
-								"Inline secret in config",
-							},
+							FileModified:    fileMtime,
+							Remediation:     "Move secret to environment variable or secret manager",
+							Notes:           notes,
 						})
 					}
 				}
@@ -108,6 +125,11 @@ func ParseMCPConfig(data map[string]interface{}, sourcePath string, toolName str
 					keyLower := strings.ToLower(key)
 					if keyLower == "authorization" || keyLower == "x-api-key" || keyLower == "api-key" {
 						if isEnvVarReference(value) {
+							notes := []string{
+								fmt.Sprintf("MCP server: %s", serverName),
+								"References environment variable",
+							}
+							notes = appendStalenessNote(notes)
 							findings = append(findings, CredentialFinding{
 								ToolName:       toolName,
 								CredentialType: fmt.Sprintf("mcp_header:%s", key),
@@ -116,12 +138,16 @@ func ParseMCPConfig(data map[string]interface{}, sourcePath string, toolName str
 								Exists:         true,
 								RiskLevel:      RiskInfo,
 								ValuePreview:   value,
-								Notes: []string{
-									fmt.Sprintf("MCP server: %s", serverName),
-									"References environment variable",
-								},
+								FileModified:   fileMtime,
+								Remediation:    "Verify env var is set in a secure environment, not committed to source",
+								Notes:          notes,
 							})
 						} else {
+							notes := []string{
+								fmt.Sprintf("MCP server: %s", serverName),
+								"Inline auth header",
+							}
+							notes = appendStalenessNote(notes)
 							findings = append(findings, CredentialFinding{
 								ToolName:        toolName,
 								CredentialType:  fmt.Sprintf("mcp_header:%s", key),
@@ -133,10 +159,9 @@ func ParseMCPConfig(data map[string]interface{}, sourcePath string, toolName str
 								RawValue:        rawValueIf(value, showSecrets),
 								FilePermissions: perms,
 								FileOwner:       owner,
-								Notes: []string{
-									fmt.Sprintf("MCP server: %s", serverName),
-									"Inline auth header",
-								},
+								FileModified:    fileMtime,
+								Remediation:     "Move secret to environment variable or secret manager",
+								Notes:           notes,
 							})
 						}
 					}
@@ -153,6 +178,11 @@ func ParseMCPConfig(data map[string]interface{}, sourcePath string, toolName str
 						continue
 					}
 					if looksLikeSecretValue(arg) && !strings.HasPrefix(arg, "-") {
+						notes := []string{
+							fmt.Sprintf("MCP server: %s", serverName),
+							fmt.Sprintf("Token in CLI arg position %d", i),
+						}
+						notes = appendStalenessNote(notes)
 						findings = append(findings, CredentialFinding{
 							ToolName:        toolName,
 							CredentialType:  fmt.Sprintf("mcp_arg[%d]", i),
@@ -164,10 +194,9 @@ func ParseMCPConfig(data map[string]interface{}, sourcePath string, toolName str
 							RawValue:        rawValueIf(arg, showSecrets),
 							FilePermissions: perms,
 							FileOwner:       owner,
-							Notes: []string{
-								fmt.Sprintf("MCP server: %s", serverName),
-								fmt.Sprintf("Token in CLI arg position %d", i),
-							},
+							FileModified:    fileMtime,
+							Remediation:     "Move secret to environment variable or secret manager",
+							Notes:           notes,
 						})
 					}
 				}

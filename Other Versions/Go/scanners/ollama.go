@@ -88,6 +88,7 @@ func (s *ollamaScanner) scanEnvVars(result *core.ScanResult, showSecrets bool) {
 				Exists:         true,
 				RiskLevel:      core.RiskHigh,
 				ValuePreview:   value,
+				Remediation:    "Bind to 127.0.0.1 instead of 0.0.0.0",
 				Notes: []string{
 					"Ollama API bound to all interfaces (0.0.0.0)",
 					"No built-in authentication — any network device can access the API",
@@ -106,6 +107,7 @@ func (s *ollamaScanner) scanEnvVars(result *core.ScanResult, showSecrets bool) {
 				Exists:         true,
 				RiskLevel:      core.RiskMedium,
 				ValuePreview:   value,
+				Remediation:    "Restrict CORS origins",
 				Notes:          []string{"Wildcard CORS — any website can make requests to Ollama API"},
 			})
 			continue
@@ -126,6 +128,7 @@ func (s *ollamaScanner) scanEnvVars(result *core.ScanResult, showSecrets bool) {
 				RiskLevel:      core.RiskMedium,
 				ValuePreview:   core.MaskValue(value, showSecrets),
 				RawValue:       rawValue,
+				Remediation:    "Use environment variables securely",
 				Notes:          []string{"Ollama API key (likely for auth proxy)"},
 			})
 			continue
@@ -140,6 +143,7 @@ func (s *ollamaScanner) scanEnvVars(result *core.ScanResult, showSecrets bool) {
 			Exists:         true,
 			RiskLevel:      core.RiskInfo,
 			ValuePreview:   value,
+			Remediation:    "Use environment variables securely",
 			Notes:          []string{"Configuration flag"},
 		})
 	}
@@ -161,6 +165,7 @@ func (s *ollamaScanner) checkNetworkExposure(result *core.ScanResult) {
 				Location:       "listening on 0.0.0.0:11434",
 				Exists:         true,
 				RiskLevel:      core.RiskCritical,
+				Remediation:    "Bind to 127.0.0.1 instead of 0.0.0.0",
 				Notes: []string{
 					"Ollama API is currently listening on all interfaces",
 					"No built-in authentication — any device on the network can run inference",
@@ -199,6 +204,13 @@ func (s *ollamaScanner) scanSystemdService(result *core.ScanResult, showSecrets 
 
 			// Check for OLLAMA_HOST=0.0.0.0
 			if strings.Contains(envVal, "OLLAMA_HOST") && strings.Contains(envVal, "0.0.0.0") {
+				notes := []string{
+					"Ollama systemd service configured to bind to 0.0.0.0",
+					"API exposed to network without authentication",
+				}
+				if mtime := core.GetFileMtimeTime(path); !mtime.IsZero() {
+					notes = append(notes, "File last modified: "+core.DescribeStaleness(mtime))
+				}
 				result.Findings = append(result.Findings, core.CredentialFinding{
 					ToolName:        s.Name(),
 					CredentialType:  "systemd_network_binding",
@@ -209,10 +221,9 @@ func (s *ollamaScanner) scanSystemdService(result *core.ScanResult, showSecrets 
 					ValuePreview:    envVal,
 					FilePermissions: perms,
 					FileOwner:       owner,
-					Notes: []string{
-						"Ollama systemd service configured to bind to 0.0.0.0",
-						"API exposed to network without authentication",
-					},
+					FileModified:    core.GetFileMtime(path),
+					Remediation:     "Bind to 127.0.0.1 instead of 0.0.0.0",
+					Notes:           notes,
 				})
 			}
 
@@ -223,6 +234,10 @@ func (s *ollamaScanner) scanSystemdService(result *core.ScanResult, showSecrets 
 					rawValue := ""
 					if showSecrets {
 						rawValue = envVal
+					}
+					notes := []string{"Secret in Ollama systemd service file"}
+					if mtime := core.GetFileMtimeTime(path); !mtime.IsZero() {
+						notes = append(notes, "File last modified: "+core.DescribeStaleness(mtime))
 					}
 					result.Findings = append(result.Findings, core.CredentialFinding{
 						ToolName:        s.Name(),
@@ -235,7 +250,9 @@ func (s *ollamaScanner) scanSystemdService(result *core.ScanResult, showSecrets 
 						RawValue:        rawValue,
 						FilePermissions: perms,
 						FileOwner:       owner,
-						Notes:           []string{"Secret in Ollama systemd service file"},
+						FileModified:    core.GetFileMtime(path),
+						Remediation:     "Use environment variables securely",
+						Notes:           notes,
 					})
 					break
 				}
@@ -278,6 +295,10 @@ func (s *ollamaScanner) scanConfigDir(basePath string, result *core.ScanResult, 
 			if showSecrets {
 				rawValue = value
 			}
+			var notes []string
+			if mtime := core.GetFileMtimeTime(jsonFile); !mtime.IsZero() {
+				notes = append(notes, "File last modified: "+core.DescribeStaleness(mtime))
+			}
 			result.Findings = append(result.Findings, core.CredentialFinding{
 				ToolName:        s.Name(),
 				CredentialType:  key,
@@ -289,6 +310,9 @@ func (s *ollamaScanner) scanConfigDir(basePath string, result *core.ScanResult, 
 				RawValue:        rawValue,
 				FilePermissions: perms,
 				FileOwner:       owner,
+				FileModified:    core.GetFileMtime(jsonFile),
+				Remediation:     "Use environment variables securely",
+				Notes:           notes,
 			})
 		}
 	}

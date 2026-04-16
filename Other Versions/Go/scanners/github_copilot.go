@@ -130,6 +130,10 @@ func (s *githubCopilotScanner) extractTokensFromJSON(
 					if showSecrets {
 						rawValue = v
 					}
+					var notes []string
+					if mtime := core.GetFileMtimeTime(path); !mtime.IsZero() {
+						notes = append(notes, "File last modified: "+core.DescribeStaleness(mtime))
+					}
 					result.Findings = append(result.Findings, core.CredentialFinding{
 						ToolName:        s.Name(),
 						CredentialType:  fmt.Sprintf("copilot:%s", key),
@@ -141,6 +145,9 @@ func (s *githubCopilotScanner) extractTokensFromJSON(
 						RawValue:        rawValue,
 						FilePermissions: perms,
 						FileOwner:       owner,
+						FileModified:    core.GetFileMtime(path),
+						Remediation:     "Restrict file permissions: chmod 600 " + path,
+						Notes:           notes,
 					})
 				}
 			}
@@ -175,6 +182,10 @@ func (s *githubCopilotScanner) extractTokensFromYAML(
 			if showSecrets {
 				rawValue = value
 			}
+			notes := []string{"GitHub CLI auth config"}
+			if mtime := core.GetFileMtimeTime(path); !mtime.IsZero() {
+				notes = append(notes, "File last modified: "+core.DescribeStaleness(mtime))
+			}
 			result.Findings = append(result.Findings, core.CredentialFinding{
 				ToolName:        s.Name(),
 				CredentialType:  fmt.Sprintf("gh_cli:%s", key),
@@ -186,7 +197,9 @@ func (s *githubCopilotScanner) extractTokensFromYAML(
 				RawValue:        rawValue,
 				FilePermissions: perms,
 				FileOwner:       owner,
-				Notes:           []string{"GitHub CLI auth config"},
+				FileModified:    core.GetFileMtime(path),
+				Remediation:     "Use GitHub CLI (gh auth) for secure token storage",
+				Notes:           notes,
 			})
 		}
 	}

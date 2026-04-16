@@ -179,6 +179,10 @@ func (s *openclawScanner) scanMainConfig(base string, result *core.ScanResult, s
 				if showSecrets {
 					rawValue = token
 				}
+				notes := []string{"OpenClaw gateway auth token (inline)"}
+				if mtime := core.GetFileMtimeTime(path); !mtime.IsZero() {
+					notes = append(notes, "File last modified: "+core.DescribeStaleness(mtime))
+				}
 				result.Findings = append(result.Findings, core.CredentialFinding{
 					ToolName:        s.Name(),
 					CredentialType:  "gateway_auth_token",
@@ -190,7 +194,9 @@ func (s *openclawScanner) scanMainConfig(base string, result *core.ScanResult, s
 					RawValue:        rawValue,
 					FilePermissions: perms,
 					FileOwner:       owner,
-					Notes:           []string{"OpenClaw gateway auth token (inline)"},
+					FileModified:    core.GetFileMtime(path),
+					Remediation:     "Use SecretRef (env:, file:) instead of inline secrets",
+					Notes:           notes,
 				})
 			}
 		}
@@ -246,6 +252,10 @@ func (s *openclawScanner) scanEnvFile(base string, result *core.ScanResult, show
 				if showSecrets {
 					rawValue = value
 				}
+				notes := []string{"From OpenClaw .env file"}
+				if mtime := core.GetFileMtimeTime(path); !mtime.IsZero() {
+					notes = append(notes, "File last modified: "+core.DescribeStaleness(mtime))
+				}
 				result.Findings = append(result.Findings, core.CredentialFinding{
 					ToolName:        s.Name(),
 					CredentialType:  fmt.Sprintf("env_file:%s", key),
@@ -257,7 +267,9 @@ func (s *openclawScanner) scanEnvFile(base string, result *core.ScanResult, show
 					RawValue:        rawValue,
 					FilePermissions: perms,
 					FileOwner:       owner,
-					Notes:           []string{"From OpenClaw .env file"},
+					FileModified:    core.GetFileMtime(path),
+					Remediation:     "Use SecretRef (env:, file:) instead of inline secrets",
+					Notes:           notes,
 				})
 			}
 		}
@@ -329,6 +341,9 @@ func (s *openclawScanner) extractSecretsRecursive(
 					notes = append(notes, fmt.Sprintf("Context: %s", context))
 				}
 				notes = append(notes, "SecretRef (not inline — references external source)")
+				if mtime := core.GetFileMtimeTime(path); !mtime.IsZero() {
+					notes = append(notes, "File last modified: "+core.DescribeStaleness(mtime))
+				}
 				result.Findings = append(result.Findings, core.CredentialFinding{
 					ToolName:       s.Name(),
 					CredentialType: fmt.Sprintf("secret_ref:%s", key),
@@ -337,6 +352,7 @@ func (s *openclawScanner) extractSecretsRecursive(
 					Exists:         true,
 					RiskLevel:      core.RiskInfo,
 					ValuePreview:   v,
+					FileModified:   core.GetFileMtime(path),
 					Notes:          notes,
 				})
 				continue
@@ -348,6 +364,9 @@ func (s *openclawScanner) extractSecretsRecursive(
 				notes = append(notes, fmt.Sprintf("Context: %s", context))
 			}
 			notes = append(notes, "Plaintext credential in OpenClaw config")
+			if mtime := core.GetFileMtimeTime(path); !mtime.IsZero() {
+				notes = append(notes, "File last modified: "+core.DescribeStaleness(mtime))
+			}
 
 			rawValue := ""
 			if showSecrets {
@@ -364,6 +383,8 @@ func (s *openclawScanner) extractSecretsRecursive(
 				RawValue:        rawValue,
 				FilePermissions: perms,
 				FileOwner:       owner,
+				FileModified:    core.GetFileMtime(path),
+				Remediation:     "Use SecretRef (env:, file:) instead of inline secrets",
 				Notes:           notes,
 			})
 

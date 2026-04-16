@@ -38,6 +38,8 @@ type JSONFinding struct {
 	FilePermissions string   `json:"file_permissions,omitempty"`
 	FileOwner       string   `json:"file_owner,omitempty"`
 	Expiry          string   `json:"expiry,omitempty"`
+	FileModified    string   `json:"file_modified,omitempty"`
+	Remediation     string   `json:"remediation,omitempty"`
 	Notes           []string `json:"notes,omitempty"`
 }
 
@@ -73,6 +75,8 @@ func buildReport(results []core.ScanResult, version string) JSONReport {
 				FilePermissions: f.FilePermissions,
 				FileOwner:       f.FileOwner,
 				Expiry:          f.Expiry,
+				FileModified:    f.FileModified,
+				Remediation:     f.Remediation,
 				Notes:           f.Notes,
 			}
 			report.Findings = append(report.Findings, jf)

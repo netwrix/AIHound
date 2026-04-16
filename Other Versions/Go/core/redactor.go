@@ -84,3 +84,13 @@ func IdentifyCredentialType(value string) string {
 	_, name := findMatchingPrefix(value)
 	return name
 }
+
+// GetKnownPrefixes returns the list of known credential prefixes,
+// sorted longest-first (for regex alternation construction).
+func GetKnownPrefixes() []string {
+	out := make([]string, 0, len(knownPrefixes))
+	for _, kp := range knownPrefixes {
+		out = append(out, kp.Prefix)
+	}
+	return out
+}

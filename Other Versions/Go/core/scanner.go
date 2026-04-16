@@ -11,6 +11,7 @@ const (
 	PlaintextYAML
 	PlaintextENV
 	PlaintextINI
+	PlaintextFile
 	StorageKeychain
 	StorageCredentialManager
 	EncryptedDB
@@ -29,6 +30,8 @@ func (s StorageType) String() string {
 		return "plaintext_env"
 	case PlaintextINI:
 		return "plaintext_ini"
+	case PlaintextFile:
+		return "plaintext_file"
 	case StorageKeychain:
 		return "keychain"
 	case StorageCredentialManager:
@@ -107,7 +110,9 @@ type CredentialFinding struct {
 	RawValue        string
 	FilePermissions string
 	FileOwner       string
-	Expiry          string // ISO 8601 string, empty if no expiry
+	Expiry          string   // ISO 8601 string, empty if no expiry
+	FileModified    string   // ISO 8601 string, empty if unknown
+	Remediation     string   // Actionable guidance on how to fix
 	Notes           []string
 }
 

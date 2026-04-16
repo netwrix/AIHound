@@ -119,6 +119,11 @@ func (s *chatGPTScanner) extractTokens(
 			rawValue = value
 		}
 
+		var notes []string
+		if mtime := core.GetFileMtimeTime(path); !mtime.IsZero() {
+			notes = append(notes, "File last modified: "+core.DescribeStaleness(mtime))
+		}
+
 		result.Findings = append(result.Findings, core.CredentialFinding{
 			ToolName:        s.Name(),
 			CredentialType:  key,
@@ -130,6 +135,9 @@ func (s *chatGPTScanner) extractTokens(
 			RawValue:        rawValue,
 			FilePermissions: perms,
 			FileOwner:       owner,
+			FileModified:    core.GetFileMtime(path),
+			Remediation:     "Restrict file permissions on ChatGPT config directory",
+			Notes:           notes,
 		})
 	}
 

@@ -6,6 +6,7 @@ import (
 	"io"
 	"sort"
 	"strings"
+	"time"
 
 	"aihound/core"
 )
@@ -167,6 +168,35 @@ func PrintTable(w io.Writer, results []core.ScanResult, verbose bool, noColor bo
 			}
 			fmt.Fprintf(w, "  %s Perms: %s (%s) Owner: %s\n",
 				strings.Repeat(" ", colTool), f.FilePermissions, desc, owner)
+		}
+
+		// File modified time if verbose
+		if verbose && f.FileModified != "" {
+			if t, err := time.Parse(time.RFC3339, f.FileModified); err == nil {
+				staleness := core.DescribeStaleness(t)
+				if staleness != "" {
+					fmt.Fprintf(w, "  %s Last modified: %s (%s)\n",
+						strings.Repeat(" ", colTool), f.FileModified, staleness)
+				} else {
+					fmt.Fprintf(w, "  %s Last modified: %s\n",
+						strings.Repeat(" ", colTool), f.FileModified)
+				}
+			} else {
+				fmt.Fprintf(w, "  %s Last modified: %s\n",
+					strings.Repeat(" ", colTool), f.FileModified)
+			}
+		}
+
+		// Remediation if verbose
+		if verbose && f.Remediation != "" {
+			fixColor := ""
+			fixRst := ""
+			if !noColor {
+				fixColor = colorLow // green
+				fixRst = colorReset
+			}
+			fmt.Fprintf(w, "  %s %sFix: %s%s\n",
+				strings.Repeat(" ", colTool), fixColor, f.Remediation, fixRst)
 		}
 	}
 

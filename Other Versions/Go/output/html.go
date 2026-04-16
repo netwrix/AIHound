@@ -29,17 +29,20 @@ type htmlBadge struct {
 }
 
 type htmlRow struct {
-	BgColor    string
-	ToolName   string
-	CredType   string
-	Storage    string
-	Location   string
-	ValuePrev  string
-	RiskColor  string
-	RiskLabel  string
-	Notes      []string
-	Perms      string
-	Expiry     string
+	BgColor      string
+	ToolName     string
+	CredType     string
+	Storage      string
+	Location     string
+	ValuePrev    string
+	RiskColor    string
+	RiskLabel    string
+	Notes        []string
+	Perms        string
+	Expiry       string
+	FileModified string
+	Staleness    string
+	Remediation  string
 }
 
 func riskHTMLColor(r core.RiskLevel) string {
@@ -158,6 +161,17 @@ func WriteHTMLReport(path string, results []core.ScanResult, bannerPath string, 
 		}
 		if f.Expiry != "" {
 			row.Expiry = f.Expiry
+		}
+		if f.FileModified != "" {
+			if t, err := time.Parse(time.RFC3339, f.FileModified); err == nil {
+				row.FileModified = t.Format("2006-01-02")
+				row.Staleness = core.DescribeStaleness(t)
+			} else {
+				row.FileModified = f.FileModified
+			}
+		}
+		if f.Remediation != "" {
+			row.Remediation = f.Remediation
 		}
 		rows = append(rows, row)
 	}
@@ -295,6 +309,8 @@ var htmlTmpl = template.Must(template.New("report").Parse(`<!DOCTYPE html>
     .details { font-size: 11px; color: #8892b0; }
     .note { display: block; }
     .perms, .expiry { display: block; color: #5a6580; }
+    .file-modified { display: block; color: #b0b0b0; font-size: 0.85em; margin-top: 2px; }
+    .remediation { display: block; color: #2ecc71; font-style: italic; margin-top: 4px; }
     .errors {
         margin: 20px 0;
         padding: 15px 20px;
@@ -354,7 +370,7 @@ var htmlTmpl = template.Must(template.New("report").Parse(`<!DOCTYPE html>
                     <td class="location" title="{{.Location}}">{{.Location}}</td>
                     <td class="value">{{.ValuePrev}}</td>
                     <td class="risk" style="color:{{.RiskColor}};font-weight:700">{{.RiskLabel}}</td>
-                    <td class="details">{{range .Notes}}<span class="note">{{.}}</span>{{end}}{{if .Perms}}<span class="perms">Perms: {{.Perms}}</span>{{end}}{{if .Expiry}}<span class="expiry">Expires: {{.Expiry}}</span>{{end}}</td>
+                    <td class="details">{{range .Notes}}<span class="note">{{.}}</span>{{end}}{{if .Perms}}<span class="perms">Perms: {{.Perms}}</span>{{end}}{{if .Expiry}}<span class="expiry">Expires: {{.Expiry}}</span>{{end}}{{if .FileModified}}<span class="file-modified">Modified: {{.FileModified}}{{if .Staleness}} ({{.Staleness}}){{end}}</span>{{end}}{{if .Remediation}}<span class="remediation">Fix: {{.Remediation}}</span>{{end}}</td>
                 </tr>
                 {{end}}
             </tbody>

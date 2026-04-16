@@ -88,6 +88,10 @@ func (s *amazonQScanner) scanAWSCredentials(path string, result *core.ScanResult
 			if showSecrets {
 				rawValue = value
 			}
+			notes := []string{fmt.Sprintf("AWS profile: [%s]", sectionName)}
+			if mtime := core.GetFileMtimeTime(path); !mtime.IsZero() {
+				notes = append(notes, "File last modified: "+core.DescribeStaleness(mtime))
+			}
 			result.Findings = append(result.Findings, core.CredentialFinding{
 				ToolName:        s.Name(),
 				CredentialType:  key,
@@ -99,7 +103,9 @@ func (s *amazonQScanner) scanAWSCredentials(path string, result *core.ScanResult
 				RawValue:        rawValue,
 				FilePermissions: perms,
 				FileOwner:       owner,
-				Notes:           []string{fmt.Sprintf("AWS profile: [%s]", sectionName)},
+				FileModified:    core.GetFileMtime(path),
+				Remediation:     "Use AWS SSO or IAM roles instead of long-lived access keys",
+				Notes:           notes,
 			})
 		}
 	}
@@ -165,6 +171,10 @@ func (s *amazonQScanner) scanSSOCache(cacheDir string, result *core.ScanResult, 
 		if showSecrets {
 			rawValue = accessToken
 		}
+		notes := []string{"AWS SSO cached token"}
+		if mtime := core.GetFileMtimeTime(jsonFile); !mtime.IsZero() {
+			notes = append(notes, "File last modified: "+core.DescribeStaleness(mtime))
+		}
 		result.Findings = append(result.Findings, core.CredentialFinding{
 			ToolName:        s.Name(),
 			CredentialType:  "sso_access_token",
@@ -176,7 +186,9 @@ func (s *amazonQScanner) scanSSOCache(cacheDir string, result *core.ScanResult, 
 			RawValue:        rawValue,
 			FilePermissions: perms,
 			FileOwner:       owner,
-			Notes:           []string{"AWS SSO cached token"},
+			FileModified:    core.GetFileMtime(jsonFile),
+			Remediation:     "Rotate SSO tokens regularly",
+			Notes:           notes,
 		})
 	}
 }

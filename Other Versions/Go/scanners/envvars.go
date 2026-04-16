@@ -93,6 +93,7 @@ func (s *envVarScanner) Scan(showSecrets bool) core.ScanResult {
 				Exists:         true,
 				RiskLevel:      core.RiskInfo,
 				ValuePreview:   value,
+				Remediation:    "Use a secret manager instead of environment variables",
 				Notes:          []string{"Configuration flag, not a secret"},
 			})
 			continue
@@ -108,6 +109,7 @@ func (s *envVarScanner) Scan(showSecrets bool) core.ScanResult {
 				Exists:         true,
 				RiskLevel:      core.RiskMedium,
 				ValuePreview:   value,
+				Remediation:    "Use a secret manager instead of environment variables",
 				Notes:          []string{fmt.Sprintf("Points to service account key file: %s", value)},
 			})
 			continue
@@ -133,6 +135,7 @@ func (s *envVarScanner) Scan(showSecrets bool) core.ScanResult {
 			RiskLevel:      core.RiskMedium,
 			ValuePreview:   core.MaskValue(value, showSecrets),
 			RawValue:       rawValue,
+			Remediation:    "Use a secret manager instead of environment variables",
 			Notes:          notes,
 		})
 	}

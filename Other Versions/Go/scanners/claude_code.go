@@ -159,6 +159,10 @@ func (s *claudeCodeScanner) extractAuthEntries(
 			rawValue = value
 		}
 
+		if mtime := core.GetFileMtimeTime(path); !mtime.IsZero() {
+			notes = append(notes, "File last modified: "+core.DescribeStaleness(mtime))
+		}
+
 		result.Findings = append(result.Findings, core.CredentialFinding{
 			ToolName:        s.Name(),
 			CredentialType:  tf.credType,
@@ -171,6 +175,8 @@ func (s *claudeCodeScanner) extractAuthEntries(
 			FilePermissions: perms,
 			FileOwner:       owner,
 			Expiry:          expiryStr,
+			FileModified:    core.GetFileMtime(path),
+			Remediation:     "Restrict file permissions: chmod 600 " + path,
 			Notes:           notes,
 		})
 	}

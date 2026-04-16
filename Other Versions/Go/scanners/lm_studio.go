@@ -143,6 +143,10 @@ func (s *lmStudioScanner) extractSecrets(
 		if showSecrets {
 			rawValue = value
 		}
+		var notes []string
+		if mtime := core.GetFileMtimeTime(path); !mtime.IsZero() {
+			notes = append(notes, "File last modified: "+core.DescribeStaleness(mtime))
+		}
 		result.Findings = append(result.Findings, core.CredentialFinding{
 			ToolName:        s.Name(),
 			CredentialType:  key,
@@ -154,6 +158,9 @@ func (s *lmStudioScanner) extractSecrets(
 			RawValue:        rawValue,
 			FilePermissions: perms,
 			FileOwner:       owner,
+			FileModified:    core.GetFileMtime(path),
+			Remediation:     "Restrict file permissions: chmod 600 " + path,
+			Notes:           notes,
 		})
 	}
 
@@ -179,6 +186,13 @@ func (s *lmStudioScanner) extractSecrets(
 			portStr = fmt.Sprintf("%d", int(p))
 		}
 		if strings.Contains(host, "0.0.0.0") {
+			notes := []string{
+				"LM Studio server configured to bind to all interfaces",
+				"No built-in authentication — network devices can access the API",
+			}
+			if mtime := core.GetFileMtimeTime(path); !mtime.IsZero() {
+				notes = append(notes, "File last modified: "+core.DescribeStaleness(mtime))
+			}
 			result.Findings = append(result.Findings, core.CredentialFinding{
 				ToolName:        s.Name(),
 				CredentialType:  "server_network_binding",
@@ -189,10 +203,9 @@ func (s *lmStudioScanner) extractSecrets(
 				ValuePreview:    fmt.Sprintf("%s:%s", host, portStr),
 				FilePermissions: perms,
 				FileOwner:       owner,
-				Notes: []string{
-					"LM Studio server configured to bind to all interfaces",
-					"No built-in authentication — network devices can access the API",
-				},
+				FileModified:    core.GetFileMtime(path),
+				Remediation:     "Bind to 127.0.0.1 instead of 0.0.0.0",
+				Notes:           notes,
 			})
 		}
 	}
@@ -234,6 +247,10 @@ func (s *lmStudioScanner) scanEnvFile(path string, result *core.ScanResult, show
 				if showSecrets {
 					rawValue = value
 				}
+				notes := []string{"From .env file in LM Studio config"}
+				if mtime := core.GetFileMtimeTime(path); !mtime.IsZero() {
+					notes = append(notes, "File last modified: "+core.DescribeStaleness(mtime))
+				}
 				result.Findings = append(result.Findings, core.CredentialFinding{
 					ToolName:        s.Name(),
 					CredentialType:  fmt.Sprintf("env_file:%s", key),
@@ -245,7 +262,9 @@ func (s *lmStudioScanner) scanEnvFile(path string, result *core.ScanResult, show
 					RawValue:        rawValue,
 					FilePermissions: perms,
 					FileOwner:       owner,
-					Notes:           []string{"From .env file in LM Studio config"},
+					FileModified:    core.GetFileMtime(path),
+					Remediation:     "Restrict file permissions: chmod 600 " + path,
+					Notes:           notes,
 				})
 			}
 		}
@@ -268,6 +287,7 @@ func (s *lmStudioScanner) checkNetworkExposure(result *core.ScanResult) {
 				Location:       "listening on 0.0.0.0:1234",
 				Exists:         true,
 				RiskLevel:      core.RiskCritical,
+				Remediation:    "Bind to 127.0.0.1 instead of 0.0.0.0",
 				Notes: []string{
 					"LM Studio API server listening on all interfaces",
 					"No built-in authentication — network devices can access the API",

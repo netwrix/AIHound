@@ -91,6 +91,10 @@ func (s *continueDevScanner) scanConfig(path string, result *core.ScanResult, sh
 
 				isEnvRef := strings.Contains(apiKey, "${")
 				if isEnvRef {
+					notes := []string{"References env var (not inline)"}
+					if mtime := core.GetFileMtimeTime(path); !mtime.IsZero() {
+						notes = append(notes, "File last modified: "+core.DescribeStaleness(mtime))
+					}
 					result.Findings = append(result.Findings, core.CredentialFinding{
 						ToolName:        s.Name(),
 						CredentialType:  fmt.Sprintf("api_key (%s)", provider),
@@ -101,12 +105,18 @@ func (s *continueDevScanner) scanConfig(path string, result *core.ScanResult, sh
 						ValuePreview:    apiKey,
 						FilePermissions: perms,
 						FileOwner:       owner,
-						Notes:           []string{"References env var (not inline)"},
+						FileModified:    core.GetFileMtime(path),
+						Remediation:     "Use environment variables instead of inline API keys in config",
+						Notes:           notes,
 					})
 				} else {
 					rawValue := ""
 					if showSecrets {
 						rawValue = apiKey
+					}
+					notes := []string{"PLAINTEXT API key in config!"}
+					if mtime := core.GetFileMtimeTime(path); !mtime.IsZero() {
+						notes = append(notes, "File last modified: "+core.DescribeStaleness(mtime))
 					}
 					result.Findings = append(result.Findings, core.CredentialFinding{
 						ToolName:        s.Name(),
@@ -119,7 +129,9 @@ func (s *continueDevScanner) scanConfig(path string, result *core.ScanResult, sh
 						RawValue:        rawValue,
 						FilePermissions: perms,
 						FileOwner:       owner,
-						Notes:           []string{"PLAINTEXT API key in config!"},
+						FileModified:    core.GetFileMtime(path),
+						Remediation:     "Use environment variables instead of inline API keys in config",
+						Notes:           notes,
 					})
 				}
 			}
@@ -135,6 +147,10 @@ func (s *continueDevScanner) scanConfig(path string, result *core.ScanResult, sh
 					if showSecrets {
 						rawValue = apiKey
 					}
+					notes := []string{"PLAINTEXT API key in config!"}
+					if mtime := core.GetFileMtimeTime(path); !mtime.IsZero() {
+						notes = append(notes, "File last modified: "+core.DescribeStaleness(mtime))
+					}
 					result.Findings = append(result.Findings, core.CredentialFinding{
 						ToolName:        s.Name(),
 						CredentialType:  "tabAutocomplete api_key",
@@ -146,7 +162,9 @@ func (s *continueDevScanner) scanConfig(path string, result *core.ScanResult, sh
 						RawValue:        rawValue,
 						FilePermissions: perms,
 						FileOwner:       owner,
-						Notes:           []string{"PLAINTEXT API key in config!"},
+						FileModified:    core.GetFileMtime(path),
+						Remediation:     "Use environment variables instead of inline API keys in config",
+						Notes:           notes,
 					})
 				}
 			}

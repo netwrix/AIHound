@@ -113,6 +113,11 @@ func (s *windsurfScanner) extractTokens(
 			rawValue = value
 		}
 
+		var notes []string
+		if mtime := core.GetFileMtimeTime(path); !mtime.IsZero() {
+			notes = append(notes, "File last modified: "+core.DescribeStaleness(mtime))
+		}
+
 		result.Findings = append(result.Findings, core.CredentialFinding{
 			ToolName:        s.Name(),
 			CredentialType:  key,
@@ -124,6 +129,9 @@ func (s *windsurfScanner) extractTokens(
 			RawValue:        rawValue,
 			FilePermissions: perms,
 			FileOwner:       owner,
+			FileModified:    core.GetFileMtime(path),
+			Remediation:     "Restrict file permissions: chmod 600 " + path,
+			Notes:           notes,
 		})
 	}
 }

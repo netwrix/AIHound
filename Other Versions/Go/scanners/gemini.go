@@ -125,6 +125,10 @@ func (s *geminiScanner) scanEnvFile(path string, result *core.ScanResult, showSe
 				if showSecrets {
 					rawValue = value
 				}
+				notes := []string{"From .env file"}
+				if mtime := core.GetFileMtimeTime(path); !mtime.IsZero() {
+					notes = append(notes, "File last modified: "+core.DescribeStaleness(mtime))
+				}
 				result.Findings = append(result.Findings, core.CredentialFinding{
 					ToolName:        s.Name(),
 					CredentialType:  fmt.Sprintf("env_file:%s", key),
@@ -136,7 +140,9 @@ func (s *geminiScanner) scanEnvFile(path string, result *core.ScanResult, showSe
 					RawValue:        rawValue,
 					FilePermissions: perms,
 					FileOwner:       owner,
-					Notes:           []string{"From .env file"},
+					FileModified:    core.GetFileMtime(path),
+					Remediation:     "Use environment variables instead of .env files",
+					Notes:           notes,
 				})
 			}
 		}
@@ -183,6 +189,10 @@ func (s *geminiScanner) scanADC(path string, result *core.ScanResult, showSecret
 		if showSecrets {
 			rawValue = val
 		}
+		notes := []string{fmt.Sprintf("Credential type: %s", credKind)}
+		if mtime := core.GetFileMtimeTime(path); !mtime.IsZero() {
+			notes = append(notes, "File last modified: "+core.DescribeStaleness(mtime))
+		}
 		result.Findings = append(result.Findings, core.CredentialFinding{
 			ToolName:        s.Name(),
 			CredentialType:  tf.credType,
@@ -194,7 +204,9 @@ func (s *geminiScanner) scanADC(path string, result *core.ScanResult, showSecret
 			RawValue:        rawValue,
 			FilePermissions: perms,
 			FileOwner:       owner,
-			Notes:           []string{fmt.Sprintf("Credential type: %s", credKind)},
+			FileModified:    core.GetFileMtime(path),
+			Remediation:     "Rotate Application Default Credentials regularly",
+			Notes:           notes,
 		})
 	}
 }
