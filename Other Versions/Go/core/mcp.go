@@ -17,6 +17,49 @@ var secretKeyPatterns = []string{
 	"bearer", "jwt",
 }
 
+// knownNonSecretKeys are env var names that are NEVER secrets — runtime/path/
+// locale plumbing. Skip the secret heuristic entirely for these to suppress
+// false positives like PYTHONPATH=C:\Users\... getting flagged as a credential.
+// Names are matched case-insensitively. Mirrors aihound.core.mcp.KNOWN_NON_SECRET_KEYS
+// in the Python source — keep the two lists in sync.
+var knownNonSecretKeys = map[string]struct{}{
+	// PATH-family
+	"PATH": {}, "PYTHONPATH": {}, "NODE_PATH": {}, "CLASSPATH": {},
+	"LD_LIBRARY_PATH": {}, "DYLD_LIBRARY_PATH": {},
+	"GOPATH": {}, "GOROOT": {}, "GOBIN": {}, "CARGO_HOME": {}, "RUSTUP_HOME": {},
+	// User / session identity
+	"HOME": {}, "USER": {}, "USERNAME": {}, "LOGNAME": {}, "USERPROFILE": {},
+	"HOMEDRIVE": {}, "HOMEPATH": {},
+	// Locale / timezone
+	"LANG": {}, "LANGUAGE": {}, "LC_ALL": {}, "LC_CTYPE": {}, "LC_MESSAGES": {},
+	"LC_NUMERIC": {}, "LC_TIME": {}, "LC_COLLATE": {}, "LC_MONETARY": {},
+	"TZ": {},
+	// Temp / runtime dirs
+	"TMP": {}, "TMPDIR": {}, "TEMP": {}, "XDG_RUNTIME_DIR": {}, "XDG_CACHE_HOME": {},
+	"XDG_CONFIG_HOME": {}, "XDG_DATA_HOME": {},
+	// Shell + display
+	"SHELL": {}, "TERM": {}, "TERM_PROGRAM": {}, "PWD": {}, "OLDPWD": {},
+	"DISPLAY": {}, "WAYLAND_DISPLAY": {}, "COLORTERM": {},
+	// Logging / debug flags
+	"DEBUG": {}, "VERBOSE": {}, "LOG_LEVEL": {}, "LOGLEVEL": {},
+	"PYTHONUNBUFFERED": {}, "PYTHONDONTWRITEBYTECODE": {},
+	"NODE_ENV": {}, "RUST_LOG": {}, "RUST_BACKTRACE": {},
+	// Node-specific
+	"NODE_OPTIONS": {}, "NPM_CONFIG_PREFIX": {},
+	// CI / orchestration noise
+	"CI": {}, "GITHUB_ACTIONS": {}, "RUNNER_OS": {},
+	// Misc OS plumbing
+	"OS": {}, "OSTYPE": {}, "MACHTYPE": {}, "PROCESSOR_ARCHITECTURE": {},
+	"SYSTEMROOT": {}, "WINDIR": {}, "COMSPEC": {},
+}
+
+// isKnownNonSecretKey returns true if the env var name is in the allowlist.
+// Matching is case-insensitive.
+func isKnownNonSecretKey(key string) bool {
+	_, ok := knownNonSecretKeys[strings.ToUpper(key)]
+	return ok
+}
+
 // ParseMCPFile reads and parses an MCP config file, returning findings.
 func ParseMCPFile(path string, toolName string, showSecrets bool) []CredentialFinding {
 	data, err := os.ReadFile(path)
@@ -69,6 +112,11 @@ func ParseMCPConfig(data map[string]interface{}, sourcePath string, toolName str
 				for key, valRaw := range env {
 					value, ok := valRaw.(string)
 					if !ok {
+						continue
+					}
+
+					// Allowlist: PATH-family / locale / shell vars are never secrets
+					if isKnownNonSecretKey(key) {
 						continue
 					}
 
@@ -236,6 +284,12 @@ func looksLikeSecretValue(value string) bool {
 		return false
 	}
 	if strings.HasPrefix(value, "/") || strings.HasPrefix(value, "http") {
+		return false
+	}
+	// Windows paths: drive letter + colon + separator (e.g. C:\foo, d:/bar).
+	// Mostly alphanumeric so they pass the ratio check below — explicit reject.
+	if len(value) >= 3 && unicode.IsLetter(rune(value[0])) &&
+		value[1] == ':' && (value[2] == '\\' || value[2] == '/') {
 		return false
 	}
 	alnumCount := 0
