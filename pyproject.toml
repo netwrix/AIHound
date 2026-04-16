@@ -4,7 +4,7 @@ build-backend = "setuptools.backends._legacy:_Backend"
 
 [project]
 name = "aihound"
-version = "0.1.0"
+version = "3.0.0"
 description = "AIHound - AI Credential & Secrets Scanner"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -16,6 +16,7 @@ keywords = ["security", "credentials", "ai", "llm", "mcp", "aihound"]
 
 [project.optional-dependencies]
 pretty = ["rich>=13.0"]
+mcp = ["mcp>=1.0"]
 
 [project.scripts]
 aihound = "aihound.cli:main"

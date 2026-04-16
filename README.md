@@ -276,6 +276,65 @@ python build.py --clean
 
 ---
 
+## Watch / Monitor Mode (v3.0.0)
+
+AIHound can run continuously and alert you the moment a new credential appears, a file's permissions change, or a local AI server starts listening on `0.0.0.0`. Perfect for individual developers — leave it running in a terminal tab or background tmux pane.
+
+```bash
+aihound --watch                                          # 30s polling, terminal alerts
+aihound --watch --interval 15                            # faster polling
+aihound --watch --notify                                 # OS-native desktop toasts for HIGH+ events
+aihound --watch --notify --notify-min-risk CRITICAL      # only toast on CRITICAL
+aihound --watch --min-risk HIGH                          # suppress all INFO/MEDIUM events entirely
+aihound --watch --watch-log ~/.aihound/watch.log         # append NDJSON log to file
+aihound --watch --json                                   # NDJSON stream to stdout (pipe into anything)
+aihound --watch --tools claude-code powershell           # scope to specific scanners
+```
+
+### Event types
+
+| Event | When it fires |
+|-------|---------------|
+| `BASELINE` | Credential existed at startup (first scan only) |
+| `NEW` | Credential appeared since last scan |
+| `REMOVED` | Credential gone since last scan |
+| `PERMISSION_CHANGED` | File permissions changed (e.g., `0600` → `0644`) |
+| `CONTENT_CHANGED` | File mtime or value preview changed |
+| `RISK_ESCALATED` | Risk level went up (e.g., `MEDIUM` → `CRITICAL`) |
+| `NETWORK_EXPOSED` | Local AI server started listening on `0.0.0.0` |
+
+### Example output
+
+```
++-+-+-+-+-+-+-+
+|N|e|t|w|r|i|x|
++-+-+-+-+-+-+-+
+...AIHound banner...
+Watch mode: interval=30s, scanners=25, min-risk=info. Press Ctrl+C to stop.
+
+[10:42:17] BASELINE  CRITICAL  Claude Code CLI      oauth_access_token       ~/.claude/.credentials.json
+[10:42:17] BASELINE  HIGH      Docker               credsStore               ~/.docker/config.json
+[10:45:03] NEW       CRITICAL  Aider                openai-api-key           ~/.aider.conf.yml
+[10:47:11] PERM+     CRITICAL  Claude Code CLI      oauth_access_token       ~/.claude/.credentials.json
+            └─ Permissions: 0600 → 0644
+[10:51:22] NETWORK   CRITICAL  Ollama               network_exposure        0.0.0.0:11434
+
+Watch stopped. 5 event(s) emitted.
+```
+
+### NDJSON log format
+
+With `--watch-log <path>` or `--json`, events are emitted as one JSON object per line:
+
+```json
+{"event_type":"new","timestamp":"2026-04-16T14:45:03Z","finding":{"tool_name":"Aider","credential_type":"openai-api-key","storage_type":"plaintext_yaml","location":"~/.aider.conf.yml","risk_level":"critical","value_preview":"sk-proj-...xyz","remediation":"Use environment variables..."}}
+{"event_type":"permission_changed","timestamp":"2026-04-16T14:47:11Z","finding":{...},"previous_finding":{"file_permissions":"0600",...}}
+```
+
+Pipe into `jq`, `grep`, a log shipper, a SIEM, whatever.
+
+---
+
 ## CLI Reference
 
 All flags are the same across all three versions:
@@ -285,13 +344,21 @@ All flags are the same across all three versions:
 | `--version` | Show version and exit |
 | `--show-secrets` | Display actual credential values (requires interactive "YES" confirmation) |
 | `--json` | Output JSON to stdout |
-| `--json-file PATH` | Write JSON report to file |
-| `--html-file PATH` | Write HTML report to file |
+| `--json-file PATH` | Write JSON report to file (creates parent dirs, expands `~`) |
+| `--html-file PATH` | Write HTML report to file (creates parent dirs, expands `~`) |
 | `--banner PATH` | Custom banner image for HTML report |
 | `--tools TOOL ...` | Only scan specified tools (by slug) |
 | `--list-tools` | List all available scanners |
 | `-v`, `--verbose` | Show debug output, permissions, and stack traces |
 | `--no-color` | Disable ANSI color codes |
+| `--watch` | Run continuously, alert on changes (Ctrl+C to stop) |
+| `--interval SECONDS` | Watch polling interval (default: 30) |
+| `--watch-log PATH` | Append watch events as NDJSON to file |
+| `--notify` | Fire OS-native desktop notifications for watch events |
+| `--notify-min-risk LEVEL` | Minimum risk to notify on (default: `high`) |
+| `--min-risk LEVEL` | Minimum risk to emit as watch events (default: `info`) |
+| `--debounce SECONDS` | Suppress duplicate events within window (default: 10) |
+| `--mcp` | Run as MCP stdio server (requires `pip install aihound[mcp]`) |
 
 ### Available Scanners (25 total)
 
@@ -441,6 +508,306 @@ This tool is for **authorized security research, penetration testing, and defens
 - Credentials are **redacted by default** — `--show-secrets` requires explicit `YES` confirmation
 - The tool is **read-only** — it never modifies, exfiltrates, or transmits any credentials
 - JSON output **never includes raw values** even with `--show-secrets`
+
+## MCP Server Mode (v3.0.0)
+
+### What is this?
+
+MCP (Model Context Protocol) is a standard way for AI assistants like Claude to call external tools. When AIHound runs as an MCP server, AI assistants like **Claude Desktop**, **Claude Code**, **Cursor**, or **Windsurf** can directly scan your machine for credentials and even help you fix problems — all from inside a normal chat conversation.
+
+You'll be able to ask the AI things like:
+> "Scan my machine for exposed AI credentials and tell me what to fix."
+
+The AI will run AIHound's scanners, read the results, and walk you through (or apply) the fixes.
+
+### Quick mental model — important
+
+You will **NOT** run AIHound yourself in a terminal. The AI assistant (Claude Desktop, etc.) automatically starts AIHound in the background whenever it needs to scan. You configure it once, then forget about it. **No terminal stays open.**
+
+---
+
+### Don't want to install Python? (Windows-only shortcut)
+
+If you're on Windows and want the absolute easiest path, **skip Steps 1 and 2** and use the prebuilt `aihound.exe` directly. The shipped `.exe` already has MCP support baked in — no Python, no pip, nothing else to install.
+
+1. Get the `.exe` from `pyinstaller/dist/aihound.exe` in this repo (or build it yourself with the instructions in [Section 3 above](#3-pyinstaller-windows-executable)).
+2. Put it somewhere stable, e.g. `C:\Tools\aihound.exe`.
+3. Skip ahead to [Step 3](#step-3-pick-your-ai-assistant-and-configure-it) — but in every config snippet below, replace:
+   ```json
+   "command": "aihound",
+   "args": ["--mcp"]
+   ```
+   with:
+   ```json
+   "command": "C:\\Tools\\aihound.exe",
+   "args": ["--mcp"]
+   ```
+   (Use the actual path where you saved the `.exe`. Windows JSON requires double-backslashes.)
+
+That's it for the .exe path. Skip ahead to Step 3.
+
+If you'd rather use Python, continue below.
+
+### Step 1: Install Python (skip if you already have it)
+
+Check if Python 3.10 or newer is installed by opening a terminal (Command Prompt on Windows, Terminal on macOS/Linux) and running:
+
+```
+python --version
+```
+
+If you see `Python 3.10.x` or higher, skip to Step 2.
+
+If not, download and install Python from:
+- **All platforms:** https://www.python.org/downloads/
+- During the Windows installer, **check the box "Add Python to PATH"** at the bottom of the first screen — this is critical.
+
+Verify after install by opening a new terminal and running `python --version` again.
+
+### Step 2: Install AIHound with MCP support
+
+In your terminal, run:
+
+```
+pip install aihound[mcp]
+```
+
+This installs both AIHound and the `mcp` Python SDK that lets AI assistants talk to it.
+
+Verify it worked:
+```
+aihound --version
+```
+
+You should see `aihound 3.0.0`.
+
+If `aihound` is not found, try `python -m aihound --version` instead. If that works, use `python -m aihound` everywhere this guide says `aihound`.
+
+### Step 3: Pick your AI assistant and configure it
+
+Skip to the section for the AI assistant you use:
+- [Claude Desktop](#claude-desktop-setup)
+- [Claude Code](#claude-code-setup)
+- [Cursor](#cursor-setup)
+- [Windsurf](#windsurf-setup)
+
+---
+
+### Claude Desktop setup
+
+**Download Claude Desktop** if you don't have it: https://claude.ai/download
+
+**1. Find the config file location:**
+- **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+  - Paste that into File Explorer's address bar to open it.
+- **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+  - In Finder, press `Cmd+Shift+G` and paste the path.
+
+**2. Open the file in any text editor** (Notepad, TextEdit, VS Code, etc.).
+
+If the file doesn't exist yet, create it. If it has content already, you'll merge — don't overwrite.
+
+**3. Make the file look like this:**
+
+```json
+{
+  "mcpServers": {
+    "aihound": {
+      "command": "aihound",
+      "args": ["--mcp"]
+    }
+  }
+}
+```
+
+If the file already had a `"preferences"` block (or anything else), keep it and add the `"mcpServers"` block alongside:
+
+```json
+{
+  "preferences": { ...whatever was there... },
+  "mcpServers": {
+    "aihound": {
+      "command": "aihound",
+      "args": ["--mcp"]
+    }
+  }
+}
+```
+
+There's a ready-to-copy version at `examples/mcp-configs/claude-desktop.json` in this repo.
+
+**4. Save the file and fully quit Claude Desktop.** Closing the window is not enough:
+- Windows: Right-click the Claude icon in the system tray → Quit
+- macOS: `Cmd+Q` from the Claude window
+
+**5. Reopen Claude Desktop.** No terminal opens — it manages AIHound silently in the background.
+
+**6. Verify** — start a new conversation and ask:
+> List all the AIHound scanners and tell me what each one checks for.
+
+You should see the AI invoke a tool (usually shown with a special icon) and then list 25 scanners. If it does, you're done.
+
+---
+
+### Claude Code setup
+
+If you're using Claude Code, the easiest install is one command (run in any terminal):
+
+```
+claude mcp add aihound -- aihound --mcp
+```
+
+That's it. Quit and restart Claude Code (or just `/exit` and reopen). In a new conversation, ask:
+> List all the AIHound scanners.
+
+You should see the AI use the tool and report 25 scanners.
+
+**Alternative — share with teammates via repo:** copy `examples/mcp-configs/claude-code.json` to the project root, renamed to `.mcp.json`:
+
+```
+cp examples/mcp-configs/claude-code.json .mcp.json
+```
+
+Anyone who clones the repo and opens it in Claude Code will be prompted to enable AIHound automatically. No extra setup needed.
+
+---
+
+### Cursor setup
+
+**1. Find or create the config file:**
+- **For just yourself across all projects:** `~/.cursor/mcp.json`
+  - On Windows: `%USERPROFILE%\.cursor\mcp.json`
+- **For a specific project (committed to repo):** `.cursor/mcp.json` in the project root
+
+**2. Put this content in the file:**
+
+```json
+{
+  "mcpServers": {
+    "aihound": {
+      "command": "aihound",
+      "args": ["--mcp"]
+    }
+  }
+}
+```
+
+There's a ready-to-copy version at `examples/mcp-configs/cursor.json`.
+
+**3. Restart Cursor** (Cmd/Ctrl+Q to fully quit, then reopen).
+
+**4. Verify** — open Cursor's AI chat panel and ask:
+> List all the AIHound scanners.
+
+---
+
+### Windsurf setup
+
+**1. Find or create the config file:** `~/.codeium/windsurf/mcp_config.json`
+
+On Windows: `%USERPROFILE%\.codeium\windsurf\mcp_config.json`
+
+**2. Put this content in the file:**
+
+```json
+{
+  "mcpServers": {
+    "aihound": {
+      "command": "aihound",
+      "args": ["--mcp"]
+    }
+  }
+}
+```
+
+There's a ready-to-copy version at `examples/mcp-configs/windsurf.json`.
+
+**3. Restart Windsurf.**
+
+**4. Verify** — in the Cascade chat panel, ask:
+> List all the AIHound scanners.
+
+---
+
+### What you can do once it's set up
+
+Just talk to the AI naturally. Some examples:
+
+> "Scan my machine for exposed AI credentials."
+>
+> "Are there any CRITICAL findings I should know about?"
+>
+> "Walk me through how to fix everything CRITICAL."
+>
+> "Just check my Claude Code credentials, don't scan everything."
+
+The AI handles the tool calls behind the scenes. You see the results in plain English.
+
+### Troubleshooting
+
+**The AI doesn't seem to know about AIHound.**
+- Did you fully quit and restart the AI client? Closing the window is usually not enough.
+- Open a terminal and run `aihound --mcp` directly — it should hang waiting for input (press `Ctrl+C` to stop). If it errors with "MCP server mode requires the `mcp` Python SDK", re-run Step 2.
+
+**`aihound: command not found`**
+- Either Python isn't on your PATH, or pip installed `aihound` somewhere PATH doesn't see.
+- Try the alternative form in your config — replace `"command": "aihound"` with `"command": "python"` and add `"args": ["-m", "aihound", "--mcp"]`.
+
+**Where to find logs if something is broken:**
+- **Claude Desktop:** `%APPDATA%\Claude\logs\mcp.log` (Windows) or `~/Library/Logs/Claude/mcp.log` (macOS)
+- **Claude Code:** run `claude mcp list` — shows status (✓ Connected / ✗ Failed)
+- **Cursor / Windsurf:** check the app's developer console / output panel
+
+**Rebuilding after AIHound updates:**
+- Just re-run `pip install --upgrade aihound[mcp]`. The AI client picks up the new version automatically next time it starts AIHound.
+
+### Power-user variants
+
+For non-default setups (running AIHound from source without pip install, using a specific Python interpreter, using the PyInstaller `.exe` on Windows), see [`examples/mcp-configs/README.md`](examples/mcp-configs/README.md).
+
+### Exposed tools
+
+| Tool | Purpose |
+|------|---------|
+| `aihound_scan` | Run a full scan. Args: `tools?`, `min_risk?`, `force?`. Returns findings with opaque `finding_id`, `value_preview` (masked), `remediation`, `remediation_hint` |
+| `aihound_list_scanners` | Enumerate the 25 scanners and their platform applicability |
+| `aihound_get_remediation` | Fetch remediation details by `finding_id` — the structured hint dict plus the human-readable string |
+| `aihound_check` | Run one specific scanner by slug (bypasses cache) |
+
+### Resources (passive reads)
+
+| Resource URI | Contents |
+|--------------|----------|
+| `aihound://findings/latest` | Most recent cached scan as JSON |
+| `aihound://platform` | Detected OS + WSL status + AIHound version |
+
+### `remediation_hint` schema
+
+Every file-based finding carries a structured `remediation_hint` dict an AI can parse and execute. Examples:
+
+```json
+{"action": "chmod", "args": ["600", "/home/u/.claude/.credentials.json"]}
+{"action": "migrate_to_env", "env_vars": ["OPENAI_API_KEY"], "source": "/home/u/.openai/api_key"}
+{"action": "change_config_value", "target": "bind_address", "new_value": "127.0.0.1", "service": "ollama", "port": 11434}
+{"action": "run_command", "shell": "powershell", "commands": ["Remove-Item (Get-PSReadLineOption).HistorySavePath"]}
+{"action": "use_credential_helper", "tool": "docker", "helper_options": ["osxkeychain", "pass", "secretservice"]}
+```
+
+Seven action types: `chmod`, `migrate_to_env`, `change_config_value`, `run_command`, `use_credential_helper`, `rotate_credential`, `manual`.
+
+### Security model
+
+- **Read-only server.** AIHound never modifies files over MCP. If the assistant wants to fix something, it uses its own filesystem tools.
+- **Raw credential values never leave the process.** MCP responses contain `value_preview` (masked) only — regardless of any flag. The `raw_value` field is unconditionally stripped.
+- **stdio transport only.** No network exposure. The MCP client spawns AIHound as a subprocess.
+
+### End-to-end example (asking Claude Desktop)
+
+> You: "Scan my system for AI credential exposure and fix anything CRITICAL."
+>
+> Claude: calls `aihound_scan(min_risk="critical")` → gets back 4 findings with `remediation_hint` dicts → reads each hint → runs `chmod 600 ~/.claude/.credentials.json` via its filesystem tool → calls `aihound_scan(force=True)` to verify → reports back.
+
+---
 
 ## License
 

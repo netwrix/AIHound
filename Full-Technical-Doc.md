@@ -1047,16 +1047,204 @@ except (FileNotFoundError, subprocess.TimeoutExpired):
 
 ---
 
+## Watch / Monitor Mode (v3.0.0)
+
+Watch mode turns AIHound into a continuously-running sentinel. Re-scans on an interval, diffs findings against the previous snapshot, emits events, fans out to multiple sinks.
+
+### Module layout
+
+| File | Responsibility |
+|------|---------------|
+| `aihound/watch.py` | `WatchLoop`, `WatchEvent`, `EventType`, `diff_findings`, `DebounceTracker`, `filter_events`, `finding_key` |
+| `aihound/notifications.py` | Cross-platform OS notifications (`send_notification`, platform backends) |
+| `aihound/output/watch_formatters.py` | `TerminalEventSink`, `NDJSONEventSink`, `NotificationEventSink` |
+| `tests/test_watch_diff.py` | Unit tests (28 tests) for diff engine, debouncing, filtering |
+
+### Event types (`EventType` enum)
+
+| Event | Meaning |
+|-------|---------|
+| `BASELINE` | Existing finding on first scan (initial snapshot) |
+| `NEW` | Credential appeared since last scan |
+| `REMOVED` | Credential gone since last scan |
+| `PERMISSION_CHANGED` | File permissions changed |
+| `CONTENT_CHANGED` | File mtime or `value_preview` changed (suppressed if `PERMISSION_CHANGED` already fires for same key) |
+| `RISK_ESCALATED` | Risk level went up (emitted in addition to the underlying change event) |
+| `NETWORK_EXPOSED` | `NEW` event reclassified when from a network scanner (`Ollama`, `LM Studio`, `AI Network Exposure`) at `CRITICAL` severity |
+
+### Stable key
+
+`finding_key(f) = (f.tool_name, f.credential_type, f.location)` — a 3-tuple. Stable because `location` is the file path for all scanners (for the `powershell` scanner, `location` includes `:line_number`, which correctly distinguishes multiple secrets in the same history file).
+
+### Diff algorithm
+
+```python
+old_keys = set(old.keys())
+new_keys = set(new.keys())
+
+# NEW (with NETWORK_EXPOSED reclassification for network scanners)
+for key in new_keys - old_keys:
+    emit NEW or NETWORK_EXPOSED
+
+# REMOVED
+for key in old_keys - new_keys:
+    emit REMOVED
+
+# CHANGED (intersection)
+for key in new_keys & old_keys:
+    if perms changed:      emit PERMISSION_CHANGED
+    elif content changed:  emit CONTENT_CHANGED   # suppressed if perms also changed
+    if risk escalated:     emit RISK_ESCALATED    # emitted in addition
+```
+
+### Debouncing
+
+`DebounceTracker` suppresses duplicate `(finding_key, event_type)` pairs within a sliding window (default 10s, configurable via `--debounce`, `0` disables). Prevents event storms from files written multiple times in rapid succession.
+
+### min-risk filtering
+
+`filter_events(events, min_risk)` drops events below the threshold — with one exception: `REMOVED` events are always kept regardless of severity (state change is always worth knowing about).
+
+### Sinks
+
+All sinks are callables taking `(event: WatchEvent) -> None`. `WatchLoop` wraps each call in a try/except so one failing sink never breaks another.
+
+**`TerminalEventSink`** — Colored one-line output, uses the same palette as `aihound/output/table.py`. Shows risk transitions (`old → new`) and permission transitions (`0600 → 0644`) as sub-lines.
+
+**`NDJSONEventSink`** — One `json.dumps(event.to_dict())` per line. Supports stdout OR a file path. File mode opens in append mode with line buffering (line-atomic writes).
+
+**`NotificationEventSink`** — OS-native toasts filtered by `min_risk`. Never fires on `BASELINE` (would flood on startup). `REMOVED` always fires regardless of severity. Urgency mapping: CRITICAL → critical (Linux urgency), HIGH → normal, else → low.
+
+### Platform-specific notification backends
+
+| Platform | Backend | Requirements |
+|----------|---------|--------------|
+| Linux / WSL | `notify-send` | `libnotify-bin` (apt) / `libnotify` (dnf) + a running D-Bus session |
+| macOS | `osascript` | Built-in (plays `Basso` sound at CRITICAL) |
+| Windows | PowerShell `Windows.UI.Notifications` | Built-in on Windows 10+ |
+
+Capability is checked once on first use; if backend missing, `send_notification()` silently returns False for the rest of the session.
+
+### CLI flags added
+
+| Flag | Default | Purpose |
+|------|---------|---------|
+| `--watch` | off | Enable watch mode |
+| `--interval SECONDS` | 30 | Polling interval |
+| `--watch-log PATH` | — | Append NDJSON to file |
+| `--notify` | off | Fire OS notifications |
+| `--notify-min-risk LEVEL` | `high` | Min risk for notifications |
+| `--min-risk LEVEL` | `info` | Min risk for any event emission |
+| `--debounce SECONDS` | 10 | Duplicate suppression window |
+
+### Signal handling
+
+`SIGINT` and `SIGTERM` (Unix only) set a `_stop` flag checked between scan cycles and during sleep. Sleep is broken into 0.5s chunks so Ctrl+C feels responsive. On exit, summary line `"Watch stopped. N event(s) emitted."` goes to stderr (doesn't pollute NDJSON stdout).
+
+---
+
+## MCP Server Mode (v3.0.0)
+
+Exposes AIHound's scanners to AI assistants via Model Context Protocol, enabling conversational credential triage and AI-driven remediation.
+
+### Module layout
+
+| File | Responsibility |
+|------|---------------|
+| `aihound/mcp_server.py` | MCP server entry point (`run_server`), tool/resource handlers, scan cache, serialization boundary that strips `raw_value` |
+| `aihound/remediation.py` | Hint builder helpers (`hint_chmod`, `hint_migrate_to_env`, etc.) |
+| `tests/test_mcp_server.py` | 20 unit tests for serialization, cache, parse/filter helpers |
+| `tests/test_remediation_hints.py` | 23 unit tests for hint builders |
+
+### Optional dependency
+
+The `mcp` Python SDK is NOT required for core AIHound. Install via `pip install aihound[mcp]` only if you want MCP server mode. `aihound/mcp_server.py` imports `mcp` lazily inside `run_server()`; attempting `aihound --mcp` without the SDK installed produces a clean error with install instructions and exits 1.
+
+### Transport
+
+stdio only. Newline-delimited JSON-RPC 2.0 over stdin/stdout. stderr is reserved for logs. The MCP client (Claude Desktop, Claude Code, Cursor, Windsurf) spawns `aihound --mcp` as a subprocess.
+
+### Tool surface
+
+| Tool | Args | Purpose |
+|------|------|---------|
+| `aihound_scan` | `tools?: list[str]`, `min_risk?: str`, `force?: bool` | Run scanners, return findings with opaque `finding_id`. Cached 30s unless `force=True` |
+| `aihound_list_scanners` | — | Enumerate 25 scanners with `{slug, name, applicable}` |
+| `aihound_get_remediation` | `finding_id: str` | Fetch remediation + hint for a finding. Looks up across all cached scan sessions |
+| `aihound_check` | `tool: str`, `credential_type?: str` | Run one scanner, bypass cache |
+
+### Resource surface
+
+| URI | Contents |
+|-----|----------|
+| `aihound://findings/latest` | JSON of most recent cached scan (triggers fresh scan if cache empty) |
+| `aihound://platform` | `{os, is_wsl, aihound_version}` |
+
+### `CredentialFinding.remediation_hint` field
+
+Added in v3.0.0. An `Optional[dict]` alongside the human-readable `remediation` string. Seven supported action types:
+
+| `action` | Required fields | Example |
+|----------|----------------|---------|
+| `chmod` | `args: [mode, path]` | `{"action": "chmod", "args": ["600", "/home/u/.claude/.credentials.json"]}` |
+| `migrate_to_env` | `env_vars: list[str]`, `source: path` | `{"action": "migrate_to_env", "env_vars": ["OPENAI_API_KEY"], "source": "/home/u/.openai/api_key"}` |
+| `change_config_value` | `target: str`, `new_value`, `source: path` | `{"action": "change_config_value", "target": "server.host", "new_value": "127.0.0.1", "source": "/etc/foo.json"}` |
+| `run_command` | `commands: list[str]`, `shell: str` | `{"action": "run_command", "shell": "powershell", "commands": ["Remove-Item …"]}` |
+| `use_credential_helper` | `tool: str`, `helper_options: list[str]` | `{"action": "use_credential_helper", "tool": "docker", "helper_options": ["osxkeychain", "pass"]}` |
+| `rotate_credential` | `provider: str`, `description: str` | `{"action": "rotate_credential", "provider": "anthropic", "description": "Rotate via console.anthropic.com"}` |
+| `manual` | `description: str` (plus any extra fields) | `{"action": "manual", "description": "…", "suggested_tools": ["vault"]}` |
+
+The `hint_network_bind(service, path?, port?)` helper produces a specialized `change_config_value` dict with `bind_address → 127.0.0.1` and service context. All 25 scanners and `core/mcp.py` populate `remediation_hint` via these helpers.
+
+### Finding ID
+
+`_finding_id(f)` hashes `tool_name|credential_type|location` with SHA-256 and truncates to 16 hex chars. Stable across scans as long as the underlying credential is the same. Used by `aihound_get_remediation` to look up a finding without the AI needing to re-serialize the whole object.
+
+### Security boundary (serialization)
+
+The hard guarantee: `_finding_to_mcp(f)` calls `f.to_dict()` (which already excludes `raw_value`) and defensively `pop("raw_value", None)` anyway. Test `test_no_raw_value_in_serialized_output` asserts raw secret text never appears in the serialized response, even when populated on the finding. No flag, no argument, no MCP method exposes raw values.
+
+### Scan cache
+
+Module-level `_cache: dict[tuple, CachedScan]` keyed by `tuple(sorted(tools))`. 30-second TTL. Prevents scan storms when an AI calls `aihound_scan` repeatedly in one conversation. `force=True` bypasses; `aihound_check` always bypasses (targeted runs get fresh data).
+
+### CLI flag
+
+```
+--mcp    Run as MCP stdio server (requires `pip install aihound[mcp]`)
+```
+
+When `--mcp` is set, `main()` routes immediately to `_run_mcp_mode()` which:
+1. Reconfigures logging to stderr only (stdout reserved for JSON-RPC)
+2. Lazily imports `aihound.mcp_server`
+3. Calls `run_server()` which blocks until the client disconnects
+4. Returns exit code 0 on clean shutdown, 1 on missing `mcp` SDK
+
+### Verified end-to-end
+
+- `python3 -m aihound --mcp` without `mcp` installed: prints install hint, exits 1
+- Initialize handshake over stdio: server responds with protocol version, capabilities, serverInfo
+- `tools/list`: returns all 4 tools with proper JSON schemas
+- `tools/call aihound_scan`: returns findings with `finding_id`, `value_preview`, `remediation`, `remediation_hint`; no `raw_value`
+
+---
+
 ## Appendix: Versioning and Change Log
 
 This document describes AIHound at the v0.1.0 codebase. As new scanners, features, and output formats are added, append new sections here rather than creating separate docs.
 
-### Recent additions (post-v0.1.0)
+### v3.0.0 (current)
 
-- **v3 features** — Added 10 new scanners (`aider`, `huggingface`, `openai_cli`, `git_credentials`, `ml_platforms`, `network_exposure`, `docker`, `jupyter`, `vscode_extensions`, `browser_sessions`), plus the `PLAINTEXT_FILE` storage type, `file_modified` and `remediation` fields on `CredentialFinding`, staleness tracking, and remediation guidance across all output formats.
+- **Watch / Monitor mode** — Continuous scanning with event-based alerting. New CLI flags (`--watch`, `--interval`, `--watch-log`, `--notify`, `--notify-min-risk`, `--min-risk`, `--debounce`). New modules: `aihound/watch.py`, `aihound/notifications.py`, `aihound/output/watch_formatters.py`. See "Watch / Monitor Mode" section above for full technical details.
+- **MCP Server mode** — Exposes scanners to AI assistants over Model Context Protocol. New `--mcp` flag, new modules: `aihound/mcp_server.py`, `aihound/remediation.py`. New `remediation_hint` field on `CredentialFinding` carries machine-readable fix actions. Optional dependency: `pip install aihound[mcp]`. See "MCP Server Mode" section above.
+- **CLI output-file fixes** — `--json-file` and `--html-file` now auto-create missing parent directories, expand `~`, and return clean errors (exit code 1) on failure instead of ugly Python tracebacks.
+- **`__main__.py`** — Now propagates `main()`'s return value via `sys.exit()` so non-zero exit codes work correctly.
+
+### Prior additions
+
+- **v2 features** — Added 10 new scanners (`aider`, `huggingface`, `openai_cli`, `git_credentials`, `ml_platforms`, `network_exposure`, `docker`, `jupyter`, `vscode_extensions`, `browser_sessions`), plus the `PLAINTEXT_FILE` storage type, `file_modified` and `remediation` fields on `CredentialFinding`, staleness tracking, and remediation guidance across all output formats.
 - **PowerShell scanner** — Added `powershell` scanner for PSReadLine history and transcripts with two-pass regex detection (known prefixes + context patterns).
 
 ### Pending / Future work
 
-- **MCP server mode (feature 18)** — Run AIHound itself as an MCP server so AI assistants can query credential status directly. Tracked in memory, to be implemented separately.
-- **Go port feature parity** — Port the v3 features and PowerShell scanner to the Go version under `Go/`.
+- All in-scope features are now at parity across Python, Go binary, and PyInstaller .exe distributions.
