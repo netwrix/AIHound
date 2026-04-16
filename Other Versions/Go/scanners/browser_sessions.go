@@ -10,6 +10,7 @@ import (
 	_ "modernc.org/sqlite"
 
 	"aihound/core"
+	"aihound/remediation"
 )
 
 var browserAIDomains = []string{
@@ -248,6 +249,7 @@ func (s *browserSessionsScanner) scanFirefoxWebappsstore(profileDir string, resu
 			FileOwner:       owner,
 			FileModified:    mtime,
 			Remediation:     "Ensure browser profile directory has restricted permissions (chmod 700). Clear site data to revoke local sessions.",
+			RemediationHint: remediation.HintChmod("700", profileDir),
 			Notes:           notes,
 		})
 	}
@@ -333,6 +335,7 @@ func (s *browserSessionsScanner) scanFirefoxCookies(profileDir string, result *c
 			FileOwner:       owner,
 			FileModified:    mtime,
 			Remediation:     "Ensure browser profile directory has restricted permissions (chmod 700). Clear site cookies to revoke this session.",
+			RemediationHint: remediation.HintChmod("700", profileDir),
 			Notes:           notes,
 		})
 	}
@@ -420,6 +423,7 @@ func (s *browserSessionsScanner) recordChromiumStub(browserName, localStorageDir
 		RiskLevel:      core.RiskInfo,
 		FileModified:   mtime,
 		Remediation:    "Review browser storage manually or use dedicated Chromium LevelDB tools.",
+		RemediationHint: remediation.HintManual("Review browser storage manually or use dedicated Chromium LevelDB tools."),
 		Notes:          notes,
 	})
 }

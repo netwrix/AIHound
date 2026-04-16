@@ -187,7 +187,11 @@ func WriteHTMLReport(path string, results []core.ScanResult, bannerPath string, 
 		Errors:     allErrors,
 	}
 
-	f, err := os.Create(path)
+	resolved, err := prepareOutputPath(path)
+	if err != nil {
+		return err
+	}
+	f, err := os.Create(resolved)
 	if err != nil {
 		return err
 	}

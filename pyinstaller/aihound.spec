@@ -51,6 +51,19 @@ hidden_imports = [
     'aihound.scanners.vscode_extensions',
     'aihound.scanners.browser_sessions',
     'aihound.scanners.powershell',
+    # v3 watch + MCP infrastructure
+    'aihound.watch',
+    'aihound.notifications',
+    'aihound.remediation',
+    'aihound.output.watch_formatters',
+    'aihound.mcp_server',
+    # mcp SDK + transitive deps that PyInstaller's static analyzer misses
+    'mcp',
+    'mcp.server',
+    'mcp.server.fastmcp',
+    'mcp.server.stdio',
+    'mcp.shared',
+    'mcp.types',
     # Output modules
     'aihound.output',
     'aihound.output.table',

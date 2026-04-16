@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"aihound/core"
+	"aihound/remediation"
 )
 
 type amazonQScanner struct{}
@@ -105,6 +106,10 @@ func (s *amazonQScanner) scanAWSCredentials(path string, result *core.ScanResult
 				FileOwner:       owner,
 				FileModified:    core.GetFileMtime(path),
 				Remediation:     "Use AWS SSO or IAM roles instead of long-lived access keys",
+				RemediationHint: remediation.HintManual(
+					"Use AWS SSO or IAM roles instead of long-lived access keys",
+					map[string]any{"suggested_commands": []string{"aws configure sso"}},
+				),
 				Notes:           notes,
 			})
 		}
@@ -188,6 +193,7 @@ func (s *amazonQScanner) scanSSOCache(cacheDir string, result *core.ScanResult, 
 			FileOwner:       owner,
 			FileModified:    core.GetFileMtime(jsonFile),
 			Remediation:     "Rotate SSO tokens regularly",
+			RemediationHint: remediation.HintRotateCredential("aws-sso", "Rotate SSO tokens regularly"),
 			Notes:           notes,
 		})
 	}

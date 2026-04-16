@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"aihound/core"
+	"aihound/remediation"
 )
 
 var (
@@ -205,6 +206,13 @@ func (s *powershellScanner) addFinding(
 		FileOwner:       owner,
 		FileModified:    mtime,
 		Remediation:     "Clear PowerShell history (Remove-Item (Get-PSReadLineOption).HistorySavePath), rotate the exposed credential, and consider Set-PSReadLineOption -HistorySaveStyle SaveNothing for sessions that handle secrets",
+		RemediationHint: remediation.HintRunCommand(
+			[]string{
+				"Remove-Item (Get-PSReadLineOption).HistorySavePath",
+				"Set-PSReadLineOption -HistorySaveStyle SaveNothing",
+			},
+			"powershell",
+		),
 		Notes:           notes,
 	})
 }

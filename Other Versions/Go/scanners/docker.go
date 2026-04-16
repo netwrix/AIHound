@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"aihound/core"
+	"aihound/remediation"
 )
 
 var dockerSecretKeyTokens = []string{"token", "secret", "key", "password", "auth"}
@@ -105,6 +106,7 @@ func (s *dockerScanner) scanDockerConfig(path string, result *core.ScanResult, s
 						FileOwner:       owner,
 						FileModified:    mtime,
 						Remediation:     dockerRemediation,
+						RemediationHint: remediation.HintUseCredentialHelper("docker", []string{"osxkeychain", "pass", "secretservice"}),
 						Notes:           notes,
 					})
 				}
@@ -134,6 +136,7 @@ func (s *dockerScanner) scanDockerConfig(path string, result *core.ScanResult, s
 						FileOwner:       owner,
 						FileModified:    mtime,
 						Remediation:     dockerRemediation,
+						RemediationHint: remediation.HintUseCredentialHelper("docker", []string{"osxkeychain", "pass", "secretservice"}),
 						Notes:           notes,
 					})
 				}
@@ -182,6 +185,7 @@ func (s *dockerScanner) scanDockerConfig(path string, result *core.ScanResult, s
 						FileOwner:       owner,
 						FileModified:    mtime,
 						Remediation:     dockerRemediation,
+						RemediationHint: remediation.HintUseCredentialHelper("docker", []string{"osxkeychain", "pass", "secretservice"}),
 						Notes:           notes,
 					})
 				}
@@ -210,6 +214,7 @@ func (s *dockerScanner) scanDockerConfig(path string, result *core.ScanResult, s
 			FileOwner:       owner,
 			FileModified:    mtime,
 			Remediation:     dockerRemediation,
+			RemediationHint: remediation.HintUseCredentialHelper("docker", []string{"osxkeychain", "pass", "secretservice"}),
 			Notes:           notes,
 		})
 	}
@@ -242,6 +247,7 @@ func (s *dockerScanner) scanDockerConfig(path string, result *core.ScanResult, s
 					FileOwner:       owner,
 					FileModified:    mtime,
 					Remediation:     dockerRemediation,
+					RemediationHint: remediation.HintUseCredentialHelper("docker", []string{"osxkeychain", "pass", "secretservice"}),
 					Notes:           notes,
 				})
 			}
@@ -290,6 +296,7 @@ func (s *dockerScanner) scanDockerConfig(path string, result *core.ScanResult, s
 				FileOwner:       owner,
 				FileModified:    mtime,
 				Remediation:     dockerRemediation,
+				RemediationHint: remediation.HintUseCredentialHelper("docker", []string{"osxkeychain", "pass", "secretservice"}),
 				Notes:           notes,
 			})
 		case map[string]interface{}:
@@ -344,6 +351,7 @@ func (s *dockerScanner) recurseForSecrets(data map[string]interface{}, path, per
 				FileOwner:       owner,
 				FileModified:    mtime,
 				Remediation:     dockerRemediation,
+				RemediationHint: remediation.HintUseCredentialHelper("docker", []string{"osxkeychain", "pass", "secretservice"}),
 				Notes:           notes,
 			})
 		}

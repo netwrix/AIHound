@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"aihound/core"
+	"aihound/remediation"
 )
 
 type githubCopilotScanner struct{}
@@ -147,6 +148,7 @@ func (s *githubCopilotScanner) extractTokensFromJSON(
 						FileOwner:       owner,
 						FileModified:    core.GetFileMtime(path),
 						Remediation:     "Restrict file permissions: chmod 600 " + path,
+						RemediationHint: remediation.HintChmod("600", path),
 						Notes:           notes,
 					})
 				}
@@ -199,6 +201,7 @@ func (s *githubCopilotScanner) extractTokensFromYAML(
 				FileOwner:       owner,
 				FileModified:    core.GetFileMtime(path),
 				Remediation:     "Use GitHub CLI (gh auth) for secure token storage",
+				RemediationHint: remediation.HintUseCredentialHelper("gh", []string{"gh auth login"}),
 				Notes:           notes,
 			})
 		}

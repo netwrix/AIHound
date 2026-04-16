@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"aihound/core"
+	"aihound/remediation"
 )
 
 type windsurfScanner struct{}
@@ -131,6 +132,7 @@ func (s *windsurfScanner) extractTokens(
 			FileOwner:       owner,
 			FileModified:    core.GetFileMtime(path),
 			Remediation:     "Restrict file permissions: chmod 600 " + path,
+			RemediationHint: remediation.HintChmod("600", path),
 			Notes:           notes,
 		})
 	}

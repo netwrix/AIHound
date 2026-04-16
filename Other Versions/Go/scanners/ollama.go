@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"aihound/core"
+	"aihound/remediation"
 )
 
 // ollamaEnvVars maps environment variable names to descriptions.
@@ -89,6 +90,7 @@ func (s *ollamaScanner) scanEnvVars(result *core.ScanResult, showSecrets bool) {
 				RiskLevel:      core.RiskHigh,
 				ValuePreview:   value,
 				Remediation:    "Bind to 127.0.0.1 instead of 0.0.0.0",
+				RemediationHint: remediation.HintNetworkBind("ollama", "", 11434),
 				Notes: []string{
 					"Ollama API bound to all interfaces (0.0.0.0)",
 					"No built-in authentication — any network device can access the API",
@@ -108,6 +110,7 @@ func (s *ollamaScanner) scanEnvVars(result *core.ScanResult, showSecrets bool) {
 				RiskLevel:      core.RiskMedium,
 				ValuePreview:   value,
 				Remediation:    "Restrict CORS origins",
+				RemediationHint: remediation.HintChangeConfigValue("OLLAMA_ORIGINS", "https://your-allowed-origin.example", fmt.Sprintf("$%s", varName)),
 				Notes:          []string{"Wildcard CORS — any website can make requests to Ollama API"},
 			})
 			continue
@@ -129,6 +132,7 @@ func (s *ollamaScanner) scanEnvVars(result *core.ScanResult, showSecrets bool) {
 				ValuePreview:   core.MaskValue(value, showSecrets),
 				RawValue:       rawValue,
 				Remediation:    "Use environment variables securely",
+				RemediationHint: remediation.HintManual("Use environment variables securely"),
 				Notes:          []string{"Ollama API key (likely for auth proxy)"},
 			})
 			continue
@@ -223,6 +227,7 @@ func (s *ollamaScanner) scanSystemdService(result *core.ScanResult, showSecrets 
 					FileOwner:       owner,
 					FileModified:    core.GetFileMtime(path),
 					Remediation:     "Bind to 127.0.0.1 instead of 0.0.0.0",
+					RemediationHint: remediation.HintNetworkBind("ollama", path, 11434),
 					Notes:           notes,
 				})
 			}
@@ -252,6 +257,7 @@ func (s *ollamaScanner) scanSystemdService(result *core.ScanResult, showSecrets 
 						FileOwner:       owner,
 						FileModified:    core.GetFileMtime(path),
 						Remediation:     "Use environment variables securely",
+						RemediationHint: remediation.HintManual("Use environment variables securely"),
 						Notes:           notes,
 					})
 					break
@@ -312,6 +318,7 @@ func (s *ollamaScanner) scanConfigDir(basePath string, result *core.ScanResult, 
 				FileOwner:       owner,
 				FileModified:    core.GetFileMtime(jsonFile),
 				Remediation:     "Use environment variables securely",
+				RemediationHint: remediation.HintManual("Use environment variables securely"),
 				Notes:           notes,
 			})
 		}

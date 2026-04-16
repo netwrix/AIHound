@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"aihound/core"
+	"aihound/remediation"
 )
 
 type claudeCodeScanner struct{}
@@ -177,6 +178,7 @@ func (s *claudeCodeScanner) extractAuthEntries(
 			Expiry:          expiryStr,
 			FileModified:    core.GetFileMtime(path),
 			Remediation:     "Restrict file permissions: chmod 600 " + path,
+			RemediationHint: remediation.HintChmod("600", path),
 			Notes:           notes,
 		})
 	}

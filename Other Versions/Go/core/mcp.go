@@ -6,6 +6,8 @@ import (
 	"os"
 	"strings"
 	"unicode"
+
+	"aihound/remediation"
 )
 
 // secretKeyPatterns are keywords that indicate an env var or value contains a secret.
@@ -86,6 +88,7 @@ func ParseMCPConfig(data map[string]interface{}, sourcePath string, toolName str
 							ValuePreview:   value,
 							FileModified:   fileMtime,
 							Remediation:    "Verify env var is set in a secure environment, not committed to source",
+							RemediationHint: remediation.HintManual("Verify env var is set in a secure environment, not committed to source"),
 							Notes:          notes,
 						})
 					} else if looksLikeSecretKey(key) || looksLikeSecretValue(value) {
@@ -107,6 +110,7 @@ func ParseMCPConfig(data map[string]interface{}, sourcePath string, toolName str
 							FileOwner:       owner,
 							FileModified:    fileMtime,
 							Remediation:     "Move secret to environment variable or secret manager",
+							RemediationHint: remediation.HintMigrateToEnv([]string{}, sourcePath),
 							Notes:           notes,
 						})
 					}
@@ -140,6 +144,7 @@ func ParseMCPConfig(data map[string]interface{}, sourcePath string, toolName str
 								ValuePreview:   value,
 								FileModified:   fileMtime,
 								Remediation:    "Verify env var is set in a secure environment, not committed to source",
+								RemediationHint: remediation.HintManual("Verify env var is set in a secure environment, not committed to source"),
 								Notes:          notes,
 							})
 						} else {
@@ -161,6 +166,7 @@ func ParseMCPConfig(data map[string]interface{}, sourcePath string, toolName str
 								FileOwner:       owner,
 								FileModified:    fileMtime,
 								Remediation:     "Move secret to environment variable or secret manager",
+								RemediationHint: remediation.HintMigrateToEnv([]string{}, sourcePath),
 								Notes:           notes,
 							})
 						}
@@ -196,6 +202,7 @@ func ParseMCPConfig(data map[string]interface{}, sourcePath string, toolName str
 							FileOwner:       owner,
 							FileModified:    fileMtime,
 							Remediation:     "Move secret to environment variable or secret manager",
+							RemediationHint: remediation.HintMigrateToEnv([]string{}, sourcePath),
 							Notes:           notes,
 						})
 					}

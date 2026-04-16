@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"aihound/core"
+	"aihound/remediation"
 )
 
 // lmStudioSecretKeys are JSON keys that indicate credentials.
@@ -160,6 +161,7 @@ func (s *lmStudioScanner) extractSecrets(
 			FileOwner:       owner,
 			FileModified:    core.GetFileMtime(path),
 			Remediation:     "Restrict file permissions: chmod 600 " + path,
+			RemediationHint: remediation.HintChmod("600", path),
 			Notes:           notes,
 		})
 	}
@@ -179,11 +181,13 @@ func (s *lmStudioScanner) extractSecrets(
 		}
 		host, _ := server["host"].(string)
 		portStr := ""
+		portInt := 0
 		switch p := server["port"].(type) {
 		case string:
 			portStr = p
 		case float64:
-			portStr = fmt.Sprintf("%d", int(p))
+			portInt = int(p)
+			portStr = fmt.Sprintf("%d", portInt)
 		}
 		if strings.Contains(host, "0.0.0.0") {
 			notes := []string{
@@ -205,6 +209,7 @@ func (s *lmStudioScanner) extractSecrets(
 				FileOwner:       owner,
 				FileModified:    core.GetFileMtime(path),
 				Remediation:     "Bind to 127.0.0.1 instead of 0.0.0.0",
+				RemediationHint: remediation.HintNetworkBind("lm-studio", path, portInt),
 				Notes:           notes,
 			})
 		}
@@ -264,6 +269,7 @@ func (s *lmStudioScanner) scanEnvFile(path string, result *core.ScanResult, show
 					FileOwner:       owner,
 					FileModified:    core.GetFileMtime(path),
 					Remediation:     "Restrict file permissions: chmod 600 " + path,
+					RemediationHint: remediation.HintChmod("600", path),
 					Notes:           notes,
 				})
 			}
@@ -288,6 +294,7 @@ func (s *lmStudioScanner) checkNetworkExposure(result *core.ScanResult) {
 				Exists:         true,
 				RiskLevel:      core.RiskCritical,
 				Remediation:    "Bind to 127.0.0.1 instead of 0.0.0.0",
+				RemediationHint: remediation.HintNetworkBind("lm-studio", "", 1234),
 				Notes: []string{
 					"LM Studio API server listening on all interfaces",
 					"No built-in authentication — network devices can access the API",

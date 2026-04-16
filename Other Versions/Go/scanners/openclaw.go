@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"aihound/core"
+	"aihound/remediation"
 )
 
 // secretKeys are the JSON keys that indicate a credential value.
@@ -196,6 +197,10 @@ func (s *openclawScanner) scanMainConfig(base string, result *core.ScanResult, s
 					FileOwner:       owner,
 					FileModified:    core.GetFileMtime(path),
 					Remediation:     "Use SecretRef (env:, file:) instead of inline secrets",
+					RemediationHint: remediation.HintManual(
+						"Use SecretRef (env:, file:) instead of inline secrets",
+						map[string]any{"suggested_format": "env:VAR_NAME"},
+					),
 					Notes:           notes,
 				})
 			}
@@ -269,6 +274,10 @@ func (s *openclawScanner) scanEnvFile(base string, result *core.ScanResult, show
 					FileOwner:       owner,
 					FileModified:    core.GetFileMtime(path),
 					Remediation:     "Use SecretRef (env:, file:) instead of inline secrets",
+					RemediationHint: remediation.HintManual(
+						"Use SecretRef (env:, file:) instead of inline secrets",
+						map[string]any{"suggested_format": "env:VAR_NAME"},
+					),
 					Notes:           notes,
 				})
 			}
@@ -385,6 +394,10 @@ func (s *openclawScanner) extractSecretsRecursive(
 				FileOwner:       owner,
 				FileModified:    core.GetFileMtime(path),
 				Remediation:     "Use SecretRef (env:, file:) instead of inline secrets",
+				RemediationHint: remediation.HintManual(
+					"Use SecretRef (env:, file:) instead of inline secrets",
+					map[string]any{"suggested_format": "env:VAR_NAME"},
+				),
 				Notes:           notes,
 			})
 

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"aihound/core"
+	"aihound/remediation"
 )
 
 type gitCredentialsScanner struct{}
@@ -136,6 +137,7 @@ func (s *gitCredentialsScanner) scanCredentialsFile(path string, result *core.Sc
 			FileOwner:       owner,
 			FileModified:    core.GetFileMtime(path),
 			Remediation:     "Use a secure credential helper (osxkeychain, manager, libsecret) instead of plaintext store",
+			RemediationHint: remediation.HintUseCredentialHelper("git", []string{"osxkeychain", "manager", "libsecret"}),
 			Notes:           notes,
 		})
 	}
@@ -203,6 +205,7 @@ func (s *gitCredentialsScanner) scanGitconfig(path string, result *core.ScanResu
 							FileOwner:       owner,
 							FileModified:    core.GetFileMtime(path),
 							Remediation:     "Remove embedded credentials from gitconfig URL; use a credential helper instead",
+							RemediationHint: remediation.HintUseCredentialHelper("git", []string{"osxkeychain", "manager", "libsecret"}),
 							Notes:           notes,
 						})
 					}
@@ -259,6 +262,7 @@ func (s *gitCredentialsScanner) scanGitconfig(path string, result *core.ScanResu
 					FileOwner:       owner,
 					FileModified:    core.GetFileMtime(path),
 					Remediation:     "Use a secure credential helper (osxkeychain, manager, libsecret) instead of plaintext store",
+					RemediationHint: remediation.HintUseCredentialHelper("git", []string{"osxkeychain", "manager", "libsecret"}),
 					Notes:           notes,
 				})
 			}

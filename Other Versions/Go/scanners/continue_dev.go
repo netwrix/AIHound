@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"aihound/core"
+	"aihound/remediation"
 )
 
 type continueDevScanner struct{}
@@ -131,6 +132,7 @@ func (s *continueDevScanner) scanConfig(path string, result *core.ScanResult, sh
 						FileOwner:       owner,
 						FileModified:    core.GetFileMtime(path),
 						Remediation:     "Use environment variables instead of inline API keys in config",
+						RemediationHint: remediation.HintMigrateToEnv([]string{}, path),
 						Notes:           notes,
 					})
 				}
@@ -164,6 +166,7 @@ func (s *continueDevScanner) scanConfig(path string, result *core.ScanResult, sh
 						FileOwner:       owner,
 						FileModified:    core.GetFileMtime(path),
 						Remediation:     "Use environment variables instead of inline API keys in config",
+						RemediationHint: remediation.HintMigrateToEnv([]string{}, path),
 						Notes:           notes,
 					})
 				}

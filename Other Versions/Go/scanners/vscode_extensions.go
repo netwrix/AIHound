@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"aihound/core"
+	"aihound/remediation"
 )
 
 var vscodeExcludedExtensions = map[string]bool{
@@ -212,6 +213,7 @@ func (s *vscodeExtensionsScanner) scanExtensionJSON(path, extensionID string, re
 			FileOwner:       owner,
 			FileModified:    mtime,
 			Remediation:     vscodeRemediation,
+			RemediationHint: remediation.HintManual(vscodeRemediation),
 			Notes:           notes,
 		})
 	}

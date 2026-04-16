@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"aihound/core"
+	"aihound/remediation"
 )
 
 // aiPorts defines AI services by port.
@@ -107,6 +108,7 @@ func (s *networkExposureScanner) checkLineForPort(line string, port int, service
 			RiskLevel:      risk,
 			ValuePreview:   fmt.Sprintf("%s:%d", cleanAddr, port),
 			Remediation:    fmt.Sprintf("Bind %s to 127.0.0.1 instead of 0.0.0.0, or use an authentication proxy", service),
+			RemediationHint: remediation.HintNetworkBind(service, "", port),
 			Notes: []string{
 				exposureNote,
 				"Most AI service web UIs have no built-in authentication",

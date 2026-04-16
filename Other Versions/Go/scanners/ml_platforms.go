@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"aihound/core"
+	"aihound/remediation"
 )
 
 var mlSecretKeyTokens = []string{"token", "key", "secret", "api_key", "apikey", "access_key"}
@@ -141,6 +142,7 @@ func (s *mlPlatformsScanner) scanPlaintext(path, label string, result *core.Scan
 		FileOwner:       owner,
 		FileModified:    core.GetFileMtime(path),
 		Remediation:     s.remediationFor(label),
+		RemediationHint: remediation.HintMigrateToEnv([]string{"REPLICATE_API_TOKEN", "TOGETHER_API_KEY", "GROQ_API_KEY"}, path),
 		Notes:           notes,
 	})
 }
@@ -216,6 +218,7 @@ func (s *mlPlatformsScanner) walkJSON(data interface{}, path, label, perms, owne
 					FileOwner:       owner,
 					FileModified:    core.GetFileMtime(path),
 					Remediation:     s.remediationFor(label),
+					RemediationHint: remediation.HintMigrateToEnv([]string{"REPLICATE_API_TOKEN", "TOGETHER_API_KEY", "GROQ_API_KEY"}, path),
 					Notes:           notes,
 				})
 			case map[string]interface{}, []interface{}:

@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"aihound/core"
+	"aihound/remediation"
 )
 
 // aiEnvVars maps environment variable names to human-readable descriptions.
@@ -110,6 +111,10 @@ func (s *envVarScanner) Scan(showSecrets bool) core.ScanResult {
 				RiskLevel:      core.RiskMedium,
 				ValuePreview:   value,
 				Remediation:    "Use a secret manager instead of environment variables",
+				RemediationHint: remediation.HintManual(
+					"Use a secret manager instead of environment variables",
+					map[string]any{"suggested_tools": []string{"1Password CLI", "doppler", "vault"}},
+				),
 				Notes:          []string{fmt.Sprintf("Points to service account key file: %s", value)},
 			})
 			continue
@@ -136,6 +141,10 @@ func (s *envVarScanner) Scan(showSecrets bool) core.ScanResult {
 			ValuePreview:   core.MaskValue(value, showSecrets),
 			RawValue:       rawValue,
 			Remediation:    "Use a secret manager instead of environment variables",
+			RemediationHint: remediation.HintManual(
+				"Use a secret manager instead of environment variables",
+				map[string]any{"suggested_tools": []string{"1Password CLI", "doppler", "vault"}},
+			),
 			Notes:          notes,
 		})
 	}

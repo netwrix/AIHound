@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"aihound/core"
+	"aihound/remediation"
 )
 
 type geminiScanner struct{}
@@ -142,6 +143,7 @@ func (s *geminiScanner) scanEnvFile(path string, result *core.ScanResult, showSe
 					FileOwner:       owner,
 					FileModified:    core.GetFileMtime(path),
 					Remediation:     "Use environment variables instead of .env files",
+					RemediationHint: remediation.HintMigrateToEnv([]string{}, path),
 					Notes:           notes,
 				})
 			}
@@ -206,6 +208,7 @@ func (s *geminiScanner) scanADC(path string, result *core.ScanResult, showSecret
 			FileOwner:       owner,
 			FileModified:    core.GetFileMtime(path),
 			Remediation:     "Rotate Application Default Credentials regularly",
+			RemediationHint: remediation.HintRotateCredential("gcloud-adc", "Rotate Application Default Credentials regularly"),
 			Notes:           notes,
 		})
 	}

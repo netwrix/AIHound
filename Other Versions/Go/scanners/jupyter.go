@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"aihound/core"
+	"aihound/remediation"
 )
 
 var jupyterPyConfigRe = regexp.MustCompile(`(?i)c\.(?:NotebookApp|ServerApp|Notebook)\.(token|password)\s*=\s*(['"])([^'"]*)['"]`)
@@ -178,6 +179,7 @@ func (s *jupyterScanner) scanPyConfig(path string, result *core.ScanResult, show
 			FileOwner:       owner,
 			FileModified:    core.GetFileMtime(path),
 			Remediation:     jupyterTokenRemediation,
+			RemediationHint: remediation.HintChangeConfigValue(field, "<strong-random-string>", path),
 			Notes:           notes,
 		})
 	}
@@ -252,6 +254,7 @@ func (s *jupyterScanner) scanJSONConfig(path string, result *core.ScanResult, sh
 				FileOwner:       owner,
 				FileModified:    core.GetFileMtime(path),
 				Remediation:     jupyterTokenRemediation,
+				RemediationHint: remediation.HintChangeConfigValue(field, "<strong-random-string>", path),
 				Notes:           notes,
 			})
 		}
@@ -324,6 +327,7 @@ func (s *jupyterScanner) scanKernelJSON(path string, result *core.ScanResult, sh
 			FileOwner:       owner,
 			FileModified:    mtime,
 			Remediation:     jupyterKernelRemediation,
+			RemediationHint: remediation.HintMigrateToEnv([]string{}, path),
 			Notes:           notes,
 		})
 	}

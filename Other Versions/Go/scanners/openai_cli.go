@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"aihound/core"
+	"aihound/remediation"
 )
 
 var openaiSecretKeyTokens = []string{"token", "key", "secret", "api_key", "apikey", "access_key", "refresh"}
@@ -150,6 +151,7 @@ func (s *openaiCLIScanner) scanPlaintext(path string, result *core.ScanResult, s
 		FileOwner:       owner,
 		FileModified:    core.GetFileMtime(path),
 		Remediation:     "Use OPENAI_API_KEY environment variable instead of plaintext file",
+		RemediationHint: remediation.HintMigrateToEnv([]string{"OPENAI_API_KEY"}, path),
 		Notes:           notes,
 	})
 }
@@ -222,6 +224,7 @@ func (s *openaiCLIScanner) walkJSON(data interface{}, path, perms, owner string,
 					FileOwner:       owner,
 					FileModified:    core.GetFileMtime(path),
 					Remediation:     "Use OPENAI_API_KEY environment variable instead of plaintext file",
+					RemediationHint: remediation.HintMigrateToEnv([]string{"OPENAI_API_KEY"}, path),
 					Notes:           notes,
 				})
 			case map[string]interface{}, []interface{}:

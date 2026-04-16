@@ -110,9 +110,10 @@ type CredentialFinding struct {
 	RawValue        string
 	FilePermissions string
 	FileOwner       string
-	Expiry          string   // ISO 8601 string, empty if no expiry
-	FileModified    string   // ISO 8601 string, empty if unknown
-	Remediation     string   // Actionable guidance on how to fix
+	Expiry          string         // ISO 8601 string, empty if no expiry
+	FileModified    string         // ISO 8601 string, empty if unknown
+	Remediation     string         // Human-readable guidance on how to fix
+	RemediationHint map[string]any // Machine-readable fix hint for AI/MCP consumers (nil if none)
 	Notes           []string
 }
 

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"aihound/core"
+	"aihound/remediation"
 )
 
 type huggingfaceScanner struct{}
@@ -86,6 +87,7 @@ func (s *huggingfaceScanner) scanTokenFile(path string, result *core.ScanResult,
 		FileOwner:       owner,
 		FileModified:    core.GetFileMtime(path),
 		Remediation:     "Use HF_TOKEN environment variable instead of plaintext token file",
+		RemediationHint: remediation.HintMigrateToEnv([]string{"HF_TOKEN"}, path),
 		Notes:           notes,
 	})
 }

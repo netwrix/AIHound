@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"aihound/core"
+	"aihound/remediation"
 )
 
 var aiderSecretKeyTokens = []string{"key", "token", "secret", "password", "passwd", "auth", "credential"}
@@ -131,6 +132,7 @@ func (s *aiderScanner) scanConfig(path string, result *core.ScanResult, showSecr
 			FileOwner:       owner,
 			FileModified:    core.GetFileMtime(path),
 			Remediation:     "Use environment variables (OPENAI_API_KEY, ANTHROPIC_API_KEY) instead of config file",
+			RemediationHint: remediation.HintMigrateToEnv([]string{"OPENAI_API_KEY", "ANTHROPIC_API_KEY"}, path),
 			Notes:           notes,
 		})
 	}

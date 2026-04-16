@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"aihound/core"
+	"aihound/remediation"
 )
 
 type chatGPTScanner struct{}
@@ -137,6 +138,7 @@ func (s *chatGPTScanner) extractTokens(
 			FileOwner:       owner,
 			FileModified:    core.GetFileMtime(path),
 			Remediation:     "Restrict file permissions on ChatGPT config directory",
+			RemediationHint: remediation.HintChmod("700", filepath.Dir(path)),
 			Notes:           notes,
 		})
 	}

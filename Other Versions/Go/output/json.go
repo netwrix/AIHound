@@ -28,19 +28,20 @@ type JSONReport struct {
 // JSONFinding represents a single credential finding in JSON output.
 // RawValue is intentionally excluded.
 type JSONFinding struct {
-	ToolName        string   `json:"tool_name"`
-	CredentialType  string   `json:"credential_type"`
-	StorageType     string   `json:"storage_type"`
-	Location        string   `json:"location"`
-	Exists          bool     `json:"exists"`
-	RiskLevel       string   `json:"risk_level"`
-	ValuePreview    string   `json:"value_preview,omitempty"`
-	FilePermissions string   `json:"file_permissions,omitempty"`
-	FileOwner       string   `json:"file_owner,omitempty"`
-	Expiry          string   `json:"expiry,omitempty"`
-	FileModified    string   `json:"file_modified,omitempty"`
-	Remediation     string   `json:"remediation,omitempty"`
-	Notes           []string `json:"notes,omitempty"`
+	ToolName        string         `json:"tool_name"`
+	CredentialType  string         `json:"credential_type"`
+	StorageType     string         `json:"storage_type"`
+	Location        string         `json:"location"`
+	Exists          bool           `json:"exists"`
+	RiskLevel       string         `json:"risk_level"`
+	ValuePreview    string         `json:"value_preview,omitempty"`
+	FilePermissions string         `json:"file_permissions,omitempty"`
+	FileOwner       string         `json:"file_owner,omitempty"`
+	Expiry          string         `json:"expiry,omitempty"`
+	FileModified    string         `json:"file_modified,omitempty"`
+	Remediation     string         `json:"remediation,omitempty"`
+	RemediationHint map[string]any `json:"remediation_hint,omitempty"`
+	Notes           []string       `json:"notes,omitempty"`
 }
 
 func buildReport(results []core.ScanResult, version string) JSONReport {
@@ -77,6 +78,7 @@ func buildReport(results []core.ScanResult, version string) JSONReport {
 				Expiry:          f.Expiry,
 				FileModified:    f.FileModified,
 				Remediation:     f.Remediation,
+				RemediationHint: f.RemediationHint,
 				Notes:           f.Notes,
 			}
 			report.Findings = append(report.Findings, jf)
@@ -108,8 +110,13 @@ func WriteJSON(w io.Writer, results []core.ScanResult, version string) error {
 }
 
 // WriteJSONFile writes a JSON report to a file.
+// Expands ~ in the path and auto-creates parent directories.
 func WriteJSONFile(path string, results []core.ScanResult, version string) error {
-	f, err := os.Create(path)
+	resolved, err := prepareOutputPath(path)
+	if err != nil {
+		return err
+	}
+	f, err := os.Create(resolved)
 	if err != nil {
 		return err
 	}
