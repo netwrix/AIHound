@@ -10,8 +10,9 @@ from aihound.core.scanner import (
 )
 from aihound.core.platform import detect_platform, Platform, get_home, get_wsl_windows_home
 from aihound.core.redactor import mask_value
-from aihound.core.permissions import get_file_permissions, get_file_owner, assess_risk
+from aihound.core.permissions import get_file_permissions, get_file_owner, assess_risk, get_file_mtime, describe_staleness
 from aihound.core.mcp import parse_mcp_file
+from aihound.remediation import hint_chmod
 from aihound.scanners import register
 
 
@@ -83,6 +84,7 @@ class WindsurfScanner(BaseScanner):
 
             perms = get_file_permissions(path)
             owner = get_file_owner(path)
+            mtime = get_file_mtime(path)
 
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))
@@ -90,16 +92,19 @@ class WindsurfScanner(BaseScanner):
                 continue
 
             if isinstance(data, dict):
-                self._extract_tokens(data, path, perms, owner, result, show_secrets)
+                self._extract_tokens(data, path, perms, owner, mtime, result, show_secrets)
 
     def _extract_tokens(
-        self, data: dict, path: Path, perms, owner, result: ScanResult, show_secrets: bool
+        self, data: dict, path: Path, perms, owner, mtime, result: ScanResult, show_secrets: bool
     ) -> None:
         token_keys = ["api_key", "apiKey", "token", "auth_token", "access_token", "refresh_token"]
         for key in token_keys:
             value = data.get(key)
             if value and isinstance(value, str) and len(value) > 8:
                 storage = StorageType.PLAINTEXT_JSON
+                notes = []
+                if mtime:
+                    notes.append(f"File last modified: {describe_staleness(mtime)}")
                 result.findings.append(CredentialFinding(
                     tool_name=self.name(),
                     credential_type=key,
@@ -111,4 +116,8 @@ class WindsurfScanner(BaseScanner):
                     raw_value=value if show_secrets else None,
                     file_permissions=perms,
                     file_owner=owner,
+                    file_modified=mtime,
+                    remediation=f"Restrict file permissions: chmod 600 {path}",
+                    remediation_hint=hint_chmod("600", str(path)),
+                    notes=notes,
                 ))

@@ -9,7 +9,7 @@ from typing import Optional
 
 from aihound import __version__
 from aihound.core.scanner import ScanResult, CredentialFinding, RiskLevel
-from aihound.core.permissions import describe_permissions
+from aihound.core.permissions import describe_permissions, describe_staleness
 
 
 def _risk_color(risk: RiskLevel) -> str:
@@ -101,6 +101,12 @@ def export_html(
         expiry_html = ""
         if f.expiry:
             expiry_html = f'<span class="expiry">Expires: {f.expiry.strftime("%Y-%m-%d %H:%M UTC")}</span>'
+        file_modified_html = ""
+        if f.file_modified:
+            file_modified_html = f'<span class="file-modified">Modified: {f.file_modified.strftime("%Y-%m-%d")} ({describe_staleness(f.file_modified)})</span>'
+        remediation_html = ""
+        if f.remediation:
+            remediation_html = f'<span class="remediation">Fix: {_esc(f.remediation)}</span>'
 
         rows_html += f"""
         <tr style="background:{bg}">
@@ -110,7 +116,7 @@ def export_html(
             <td class="location" title="{_esc(f.location)}">{_esc(f.location)}</td>
             <td class="value">{_esc(f.value_preview or '')}</td>
             <td class="risk" style="color:{color};font-weight:700">{f.risk_level.value.upper()}</td>
-            <td class="details">{notes_html}{' ' if notes_html and perms_html else ''}{perms_html}{' ' if perms_html and expiry_html else ''}{expiry_html}</td>
+            <td class="details">{notes_html}{' ' if notes_html and perms_html else ''}{perms_html}{' ' if perms_html and expiry_html else ''}{expiry_html}{file_modified_html}{remediation_html}</td>
         </tr>"""
 
     # Summary badges
@@ -248,6 +254,8 @@ def export_html(
     .details {{ font-size: 11px; color: #8892b0; }}
     .note {{ display: block; }}
     .perms, .expiry {{ display: block; color: #5a6580; }}
+    .file-modified {{ display: block; color: #b0b0b0; font-size: 0.85em; margin-top: 2px; }}
+    .remediation {{ display: block; color: #2ecc71; font-style: italic; margin-top: 4px; }}
     .errors {{
         margin: 20px 0;
         padding: 15px 20px;

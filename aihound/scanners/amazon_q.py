@@ -11,7 +11,8 @@ from aihound.core.scanner import (
 )
 from aihound.core.platform import detect_platform, Platform, get_home, get_wsl_windows_home
 from aihound.core.redactor import mask_value
-from aihound.core.permissions import get_file_permissions, get_file_owner, assess_risk
+from aihound.core.permissions import get_file_permissions, get_file_owner, assess_risk, get_file_mtime, describe_staleness
+from aihound.remediation import hint_manual, hint_rotate_credential
 from aihound.scanners import register
 
 
@@ -69,6 +70,7 @@ class AmazonQScanner(BaseScanner):
 
         perms = get_file_permissions(path)
         owner = get_file_owner(path)
+        mtime = get_file_mtime(path)
         storage = StorageType.PLAINTEXT_INI
 
         config = configparser.ConfigParser()
@@ -82,6 +84,9 @@ class AmazonQScanner(BaseScanner):
             for key in ("aws_access_key_id", "aws_secret_access_key", "aws_session_token"):
                 value = config.get(section, key, fallback=None)
                 if value:
+                    notes = [f"AWS profile: [{section}]"]
+                    if mtime:
+                        notes.append(f"File last modified: {describe_staleness(mtime)}")
                     result.findings.append(CredentialFinding(
                         tool_name=self.name(),
                         credential_type=key,
@@ -93,7 +98,13 @@ class AmazonQScanner(BaseScanner):
                         raw_value=value if show_secrets else None,
                         file_permissions=perms,
                         file_owner=owner,
-                        notes=[f"AWS profile: [{section}]"],
+                        file_modified=mtime,
+                        remediation="Use AWS SSO or IAM roles instead of long-lived access keys",
+                        remediation_hint=hint_manual(
+                            "Use AWS SSO or IAM roles instead of long-lived access keys",
+                            suggested_commands=["aws configure sso"],
+                        ),
+                        notes=notes,
                     ))
 
     def _scan_sso_cache(
@@ -105,6 +116,7 @@ class AmazonQScanner(BaseScanner):
         for json_file in cache_dir.glob("*.json"):
             perms = get_file_permissions(json_file)
             owner = get_file_owner(json_file)
+            mtime = get_file_mtime(json_file)
 
             try:
                 data = json.loads(json_file.read_text(encoding="utf-8"))
@@ -114,6 +126,9 @@ class AmazonQScanner(BaseScanner):
             if isinstance(data, dict):
                 access_token = data.get("accessToken")
                 if access_token and isinstance(access_token, str):
+                    notes = ["AWS SSO cached token"]
+                    if mtime:
+                        notes.append(f"File last modified: {describe_staleness(mtime)}")
                     result.findings.append(CredentialFinding(
                         tool_name=self.name(),
                         credential_type="sso_access_token",
@@ -125,5 +140,8 @@ class AmazonQScanner(BaseScanner):
                         raw_value=access_token if show_secrets else None,
                         file_permissions=perms,
                         file_owner=owner,
-                        notes=["AWS SSO cached token"],
+                        file_modified=mtime,
+                        remediation="Rotate SSO tokens regularly",
+                        remediation_hint=hint_rotate_credential("aws-sso", "Rotate SSO tokens regularly"),
+                        notes=notes,
                     ))

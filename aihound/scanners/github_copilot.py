@@ -13,7 +13,8 @@ from aihound.core.platform import (
     get_xdg_config,
 )
 from aihound.core.redactor import mask_value
-from aihound.core.permissions import get_file_permissions, get_file_owner, assess_risk
+from aihound.core.permissions import get_file_permissions, get_file_owner, assess_risk, get_file_mtime, describe_staleness
+from aihound.remediation import hint_chmod, hint_use_credential_helper
 from aihound.scanners import register
 
 
@@ -107,6 +108,7 @@ class GitHubCopilotScanner(BaseScanner):
 
         perms = get_file_permissions(path)
         owner = get_file_owner(path)
+        mtime = get_file_mtime(path)
 
         try:
             content = path.read_text(encoding="utf-8")
@@ -117,22 +119,25 @@ class GitHubCopilotScanner(BaseScanner):
         # Try JSON
         try:
             data = json.loads(content)
-            self._extract_tokens_from_json(data, path, perms, owner, result, show_secrets)
+            self._extract_tokens_from_json(data, path, perms, owner, mtime, result, show_secrets)
             return
         except json.JSONDecodeError:
             pass
 
         # Try YAML-like (simple key: value parsing for hosts.yml)
-        self._extract_tokens_from_yaml_simple(content, path, perms, owner, result, show_secrets)
+        self._extract_tokens_from_yaml_simple(content, path, perms, owner, mtime, result, show_secrets)
 
     def _extract_tokens_from_json(
-        self, data, path, perms, owner, result, show_secrets
+        self, data, path, perms, owner, mtime, result, show_secrets
     ) -> None:
         if isinstance(data, dict):
             for key, value in data.items():
                 if isinstance(value, str) and len(value) > 10:
                     if any(k in key.lower() for k in ["token", "oauth", "key"]):
                         storage = StorageType.PLAINTEXT_JSON
+                        notes = []
+                        if mtime:
+                            notes.append(f"File last modified: {describe_staleness(mtime)}")
                         result.findings.append(CredentialFinding(
                             tool_name=self.name(),
                             credential_type=f"copilot:{key}",
@@ -144,12 +149,16 @@ class GitHubCopilotScanner(BaseScanner):
                             raw_value=value if show_secrets else None,
                             file_permissions=perms,
                             file_owner=owner,
+                            file_modified=mtime,
+                            remediation=f"Restrict file permissions: chmod 600 {path}",
+                            remediation_hint=hint_chmod("600", str(path)),
+                            notes=notes,
                         ))
                 elif isinstance(value, dict):
-                    self._extract_tokens_from_json(value, path, perms, owner, result, show_secrets)
+                    self._extract_tokens_from_json(value, path, perms, owner, mtime, result, show_secrets)
 
     def _extract_tokens_from_yaml_simple(
-        self, content, path, perms, owner, result, show_secrets
+        self, content, path, perms, owner, mtime, result, show_secrets
     ) -> None:
         """Simple YAML parser for GitHub CLI hosts.yml oauth_token fields."""
         for line in content.splitlines():
@@ -160,6 +169,9 @@ class GitHubCopilotScanner(BaseScanner):
                 value = value.strip()
                 if key.lower() in ("oauth_token", "token") and value:
                     storage = StorageType.PLAINTEXT_YAML
+                    notes = ["GitHub CLI auth config"]
+                    if mtime:
+                        notes.append(f"File last modified: {describe_staleness(mtime)}")
                     result.findings.append(CredentialFinding(
                         tool_name=self.name(),
                         credential_type=f"gh_cli:{key}",
@@ -171,5 +183,8 @@ class GitHubCopilotScanner(BaseScanner):
                         raw_value=value if show_secrets else None,
                         file_permissions=perms,
                         file_owner=owner,
-                        notes=["GitHub CLI auth config"],
+                        file_modified=mtime,
+                        remediation="Use GitHub CLI (gh auth) for secure token storage",
+                        remediation_hint=hint_use_credential_helper("gh", ["gh auth login"]),
+                        notes=notes,
                     ))

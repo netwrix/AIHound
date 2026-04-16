@@ -18,6 +18,7 @@ class StorageType(Enum):
     PLAINTEXT_YAML = "plaintext_yaml"
     PLAINTEXT_ENV = "plaintext_env"
     PLAINTEXT_INI = "plaintext_ini"
+    PLAINTEXT_FILE = "plaintext_file"
     KEYCHAIN = "keychain"
     CREDENTIAL_MANAGER = "credman"
     ENCRYPTED_DB = "encrypted_db"
@@ -47,6 +48,9 @@ class CredentialFinding:
     file_owner: Optional[str] = None
     expiry: Optional[datetime.datetime] = None
     notes: list[str] = field(default_factory=list)
+    file_modified: Optional[datetime.datetime] = None
+    remediation: Optional[str] = None
+    remediation_hint: Optional[dict] = None  # Machine-readable fix hint for AI/MCP consumers
 
     def to_dict(self) -> dict:
         d = {
@@ -61,6 +65,9 @@ class CredentialFinding:
             "file_owner": self.file_owner,
             "expiry": self.expiry.isoformat() if self.expiry else None,
             "notes": self.notes,
+            "file_modified": self.file_modified.isoformat() if self.file_modified else None,
+            "remediation": self.remediation,
+            "remediation_hint": self.remediation_hint,
         }
         # Never include raw_value in serialized output
         return d

@@ -15,7 +15,8 @@ from aihound.core.platform import (
     get_xdg_config,
 )
 from aihound.core.redactor import mask_value
-from aihound.core.permissions import get_file_permissions, get_file_owner, assess_risk
+from aihound.core.permissions import get_file_permissions, get_file_owner, assess_risk, get_file_mtime, describe_staleness
+from aihound.remediation import hint_chmod, hint_network_bind
 from aihound.scanners import register
 
 logger = logging.getLogger("aihound.scanners.lm_studio")
@@ -111,6 +112,7 @@ class LMStudioScanner(BaseScanner):
     ) -> None:
         perms = get_file_permissions(path)
         owner = get_file_owner(path)
+        mtime = get_file_mtime(path)
 
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
@@ -119,16 +121,19 @@ class LMStudioScanner(BaseScanner):
             return
 
         if isinstance(data, dict):
-            self._extract_secrets(data, path, perms, owner, result, show_secrets)
+            self._extract_secrets(data, path, perms, owner, mtime, result, show_secrets)
 
     def _extract_secrets(
-        self, data: dict, path: Path, perms, owner,
+        self, data: dict, path: Path, perms, owner, mtime,
         result: ScanResult, show_secrets: bool,
     ) -> None:
         for key in SECRET_KEYS:
             value = data.get(key)
             if value and isinstance(value, str) and len(value) > 8:
                 storage = StorageType.PLAINTEXT_JSON
+                notes = []
+                if mtime:
+                    notes.append(f"File last modified: {describe_staleness(mtime)}")
                 result.findings.append(CredentialFinding(
                     tool_name=self.name(),
                     credential_type=key,
@@ -140,6 +145,10 @@ class LMStudioScanner(BaseScanner):
                     raw_value=value if show_secrets else None,
                     file_permissions=perms,
                     file_owner=owner,
+                    file_modified=mtime,
+                    remediation=f"Restrict file permissions: chmod 600 {path}",
+                    remediation_hint=hint_chmod("600", str(path)),
+                    notes=notes,
                 ))
 
         # Check for Hugging Face token in nested structures
@@ -147,7 +156,7 @@ class LMStudioScanner(BaseScanner):
         for nested_key in ("huggingFace", "huggingface", "hf", "auth", "credentials"):
             nested = data.get(nested_key)
             if isinstance(nested, dict):
-                self._extract_secrets(nested, path, perms, owner, result, show_secrets)
+                self._extract_secrets(nested, path, perms, owner, mtime, result, show_secrets)
 
         # Check for server config exposing non-localhost binding
         server = data.get("server") or data.get("localServer")
@@ -155,6 +164,12 @@ class LMStudioScanner(BaseScanner):
             host = server.get("host", "")
             port = server.get("port", "")
             if isinstance(host, str) and "0.0.0.0" in host:
+                notes = [
+                    "LM Studio server configured to bind to all interfaces",
+                    "No built-in authentication — network devices can access the API",
+                ]
+                if mtime:
+                    notes.append(f"File last modified: {describe_staleness(mtime)}")
                 result.findings.append(CredentialFinding(
                     tool_name=self.name(),
                     credential_type="server_network_binding",
@@ -165,10 +180,10 @@ class LMStudioScanner(BaseScanner):
                     value_preview=f"{host}:{port}",
                     file_permissions=perms,
                     file_owner=owner,
-                    notes=[
-                        "LM Studio server configured to bind to all interfaces",
-                        "No built-in authentication — network devices can access the API",
-                    ],
+                    file_modified=mtime,
+                    remediation="Bind to 127.0.0.1 instead of 0.0.0.0",
+                    remediation_hint=hint_network_bind("lm-studio", str(path), port if isinstance(port, int) else None),
+                    notes=notes,
                 ))
 
     def _scan_env_file(
@@ -179,6 +194,7 @@ class LMStudioScanner(BaseScanner):
 
         perms = get_file_permissions(path)
         owner = get_file_owner(path)
+        mtime = get_file_mtime(path)
         storage = StorageType.PLAINTEXT_ENV
 
         try:
@@ -196,6 +212,9 @@ class LMStudioScanner(BaseScanner):
                 key = key.strip()
                 value = value.strip().strip("'\"")
                 if value and any(p in key.upper() for p in secret_patterns):
+                    notes = ["From .env file in LM Studio config"]
+                    if mtime:
+                        notes.append(f"File last modified: {describe_staleness(mtime)}")
                     result.findings.append(CredentialFinding(
                         tool_name=self.name(),
                         credential_type=f"env_file:{key}",
@@ -207,7 +226,10 @@ class LMStudioScanner(BaseScanner):
                         raw_value=value if show_secrets else None,
                         file_permissions=perms,
                         file_owner=owner,
-                        notes=["From .env file in LM Studio config"],
+                        file_modified=mtime,
+                        remediation=f"Restrict file permissions: chmod 600 {path}",
+                        remediation_hint=hint_chmod("600", str(path)),
+                        notes=notes,
                     ))
 
     def _check_network_exposure(self, result: ScanResult) -> None:
@@ -227,6 +249,8 @@ class LMStudioScanner(BaseScanner):
                             location="listening on 0.0.0.0:1234",
                             exists=True,
                             risk_level=RiskLevel.CRITICAL,
+                            remediation="Bind to 127.0.0.1 instead of 0.0.0.0",
+                            remediation_hint=hint_network_bind("lm-studio", None, 1234),
                             notes=[
                                 "LM Studio API server listening on all interfaces",
                                 "No built-in authentication — network devices can access the API",

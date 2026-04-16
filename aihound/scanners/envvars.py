@@ -13,6 +13,7 @@ from aihound.core.scanner import (
 )
 from aihound.core.platform import detect_platform
 from aihound.core.redactor import mask_value, identify_credential_type
+from aihound.remediation import hint_manual
 from aihound.scanners import register
 
 # Known AI-related environment variables and their descriptions
@@ -104,6 +105,11 @@ class EnvVarScanner(BaseScanner):
                         exists=True,
                         risk_level=RiskLevel.MEDIUM,
                         value_preview=value,
+                        remediation="Use a secret manager instead of environment variables",
+                        remediation_hint=hint_manual(
+                            "Use a secret manager instead of environment variables",
+                            suggested_tools=["1Password CLI", "doppler", "vault"],
+                        ),
                         notes=[f"Points to service account key file: {value}"],
                     ))
                     continue
@@ -122,6 +128,11 @@ class EnvVarScanner(BaseScanner):
                     risk_level=RiskLevel.MEDIUM,
                     value_preview=mask_value(value, show_full=show_secrets),
                     raw_value=value if show_secrets else None,
+                    remediation="Use a secret manager instead of environment variables",
+                    remediation_hint=hint_manual(
+                        "Use a secret manager instead of environment variables",
+                        suggested_tools=["1Password CLI", "doppler", "vault"],
+                    ),
                     notes=notes,
                 ))
 

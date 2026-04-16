@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 import os
 import stat
 from pathlib import Path
@@ -137,3 +138,32 @@ def assess_risk(storage_type: StorageType, path: Optional[Path] = None) -> RiskL
         return RiskLevel.HIGH
 
     return RiskLevel.INFO
+
+
+def get_file_mtime(path) -> Optional[datetime.datetime]:
+    """Return file modification time as UTC datetime, or None on error."""
+    try:
+        mtime = os.path.getmtime(str(path))
+        return datetime.datetime.fromtimestamp(mtime, tz=datetime.timezone.utc)
+    except (OSError, ValueError):
+        return None
+
+
+def describe_staleness(mtime: datetime.datetime) -> str:
+    """Return human-readable staleness like '3 hours ago', '45 days ago'."""
+    now = datetime.datetime.now(datetime.timezone.utc)
+    delta = now - mtime
+    seconds = delta.total_seconds()
+    if seconds < 60:
+        return "just now"
+    if seconds < 3600:
+        mins = int(seconds // 60)
+        return f"{mins} minute{'s' if mins != 1 else ''} ago"
+    if seconds < 86400:
+        hours = int(seconds // 3600)
+        return f"{hours} hour{'s' if hours != 1 else ''} ago"
+    days = int(seconds // 86400)
+    if days < 365:
+        return f"{days} day{'s' if days != 1 else ''} ago"
+    years = days // 365
+    return f"{years} year{'s' if years != 1 else ''} ago"

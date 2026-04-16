@@ -12,7 +12,8 @@ from aihound.core.platform import (
     detect_platform, Platform, get_home, get_appdata, get_wsl_windows_home,
 )
 from aihound.core.redactor import mask_value
-from aihound.core.permissions import get_file_permissions, get_file_owner, assess_risk
+from aihound.core.permissions import get_file_permissions, get_file_owner, assess_risk, get_file_mtime, describe_staleness
+from aihound.remediation import hint_chmod
 from aihound.scanners import register
 
 
@@ -64,6 +65,7 @@ class ChatGPTScanner(BaseScanner):
         for json_file in base_path.glob("*.json"):
             perms = get_file_permissions(json_file)
             owner = get_file_owner(json_file)
+            mtime = get_file_mtime(json_file)
 
             try:
                 data = json.loads(json_file.read_text(encoding="utf-8"))
@@ -71,10 +73,10 @@ class ChatGPTScanner(BaseScanner):
                 continue
 
             if isinstance(data, dict):
-                self._extract_tokens(data, json_file, perms, owner, result, show_secrets)
+                self._extract_tokens(data, json_file, perms, owner, mtime, result, show_secrets)
 
     def _extract_tokens(
-        self, data: dict, path: Path, perms, owner, result: ScanResult, show_secrets: bool
+        self, data: dict, path: Path, perms, owner, mtime, result: ScanResult, show_secrets: bool
     ) -> None:
         token_keys = [
             "accessToken", "access_token", "token", "session_token",
@@ -84,6 +86,9 @@ class ChatGPTScanner(BaseScanner):
             value = data.get(key)
             if value and isinstance(value, str) and len(value) > 8:
                 storage = StorageType.PLAINTEXT_JSON
+                notes = []
+                if mtime:
+                    notes.append(f"File last modified: {describe_staleness(mtime)}")
                 result.findings.append(CredentialFinding(
                     tool_name=self.name(),
                     credential_type=key,
@@ -95,9 +100,13 @@ class ChatGPTScanner(BaseScanner):
                     raw_value=value if show_secrets else None,
                     file_permissions=perms,
                     file_owner=owner,
+                    file_modified=mtime,
+                    remediation="Restrict file permissions on ChatGPT config directory",
+                    remediation_hint=hint_chmod("700", str(path.parent)),
+                    notes=notes,
                 ))
 
         # Recurse into nested objects
         for key, val in data.items():
             if isinstance(val, dict):
-                self._extract_tokens(val, path, perms, owner, result, show_secrets)
+                self._extract_tokens(val, path, perms, owner, mtime, result, show_secrets)

@@ -6,7 +6,7 @@ import sys
 from typing import TextIO
 
 from aihound.core.scanner import ScanResult, CredentialFinding, RiskLevel
-from aihound.core.permissions import describe_permissions
+from aihound.core.permissions import describe_permissions, describe_staleness
 
 
 # ANSI color codes
@@ -164,6 +164,16 @@ def print_results(
         if verbose and f.file_permissions:
             desc = describe_permissions(f.file_permissions)
             print(f"  {'':>{col_tool}} Perms: {f.file_permissions} ({desc}) Owner: {f.file_owner or 'N/A'}", file=file)
+
+        if verbose and f.file_modified:
+            iso = f.file_modified.isoformat()
+            staleness = describe_staleness(f.file_modified)
+            print(f"  {'':>{col_tool}} Last modified: {iso} ({staleness})", file=file)
+
+        if verbose and f.remediation:
+            green = "\033[92m" if not no_color else ""
+            reset_c = RESET if not no_color else ""
+            print(f"  {'':>{col_tool}} {green}Fix: {f.remediation}{reset_c}", file=file)
 
     print(sep, file=file)
 

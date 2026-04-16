@@ -13,7 +13,12 @@ from aihound.core.scanner import (
 )
 from aihound.core.platform import detect_platform, Platform, get_home, get_wsl_windows_home
 from aihound.core.redactor import mask_value
-from aihound.core.permissions import get_file_permissions, get_file_owner, assess_risk
+from aihound.core.permissions import get_file_permissions, get_file_owner, assess_risk, get_file_mtime, describe_staleness
+from aihound.remediation import (
+    hint_change_config_value,
+    hint_manual,
+    hint_network_bind,
+)
 from aihound.scanners import register
 
 logger = logging.getLogger("aihound.scanners.ollama")
@@ -90,6 +95,8 @@ class OllamaScanner(BaseScanner):
                     exists=True,
                     risk_level=RiskLevel.HIGH,
                     value_preview=value,
+                    remediation="Bind to 127.0.0.1 instead of 0.0.0.0",
+                    remediation_hint=hint_network_bind("ollama", None, 11434),
                     notes=[
                         "Ollama API bound to all interfaces (0.0.0.0)",
                         "No built-in authentication — any network device can access the API",
@@ -107,6 +114,10 @@ class OllamaScanner(BaseScanner):
                     exists=True,
                     risk_level=RiskLevel.MEDIUM,
                     value_preview=value,
+                    remediation="Restrict CORS origins",
+                    remediation_hint=hint_change_config_value(
+                        "OLLAMA_ORIGINS", "https://your-allowed-origin.example", f"${var_name}"
+                    ),
                     notes=["Wildcard CORS — any website can make requests to Ollama API"],
                 ))
                 continue
@@ -122,6 +133,8 @@ class OllamaScanner(BaseScanner):
                     risk_level=RiskLevel.MEDIUM,
                     value_preview=mask_value(value, show_full=show_secrets),
                     raw_value=value if show_secrets else None,
+                    remediation="Use environment variables securely",
+                    remediation_hint=hint_manual("Use environment variables securely"),
                     notes=["Ollama API key (likely for auth proxy)"],
                 ))
                 continue
@@ -155,6 +168,8 @@ class OllamaScanner(BaseScanner):
                             location="listening on 0.0.0.0:11434",
                             exists=True,
                             risk_level=RiskLevel.CRITICAL,
+                            remediation="Bind to 127.0.0.1 instead of 0.0.0.0",
+                            remediation_hint=hint_network_bind("ollama", None, 11434),
                             notes=[
                                 "Ollama API is currently listening on all interfaces",
                                 "No built-in authentication — any device on the network can run inference",
@@ -179,6 +194,7 @@ class OllamaScanner(BaseScanner):
             logger.debug("Reading systemd service: %s", path)
             perms = get_file_permissions(path)
             owner = get_file_owner(path)
+            mtime = get_file_mtime(path)
 
             try:
                 content = path.read_text(encoding="utf-8")
@@ -194,6 +210,12 @@ class OllamaScanner(BaseScanner):
 
                     # Check for OLLAMA_HOST=0.0.0.0
                     if "OLLAMA_HOST" in env_val and "0.0.0.0" in env_val:
+                        notes = [
+                            "Ollama systemd service configured to bind to 0.0.0.0",
+                            "API exposed to network without authentication",
+                        ]
+                        if mtime:
+                            notes.append(f"File last modified: {describe_staleness(mtime)}")
                         result.findings.append(CredentialFinding(
                             tool_name=self.name(),
                             credential_type="systemd_network_binding",
@@ -204,14 +226,17 @@ class OllamaScanner(BaseScanner):
                             value_preview=env_val,
                             file_permissions=perms,
                             file_owner=owner,
-                            notes=[
-                                "Ollama systemd service configured to bind to 0.0.0.0",
-                                "API exposed to network without authentication",
-                            ],
+                            file_modified=mtime,
+                            remediation="Bind to 127.0.0.1 instead of 0.0.0.0",
+                            remediation_hint=hint_network_bind("ollama", str(path), 11434),
+                            notes=notes,
                         ))
 
                     # Check for any secret-looking values
                     if any(kw in env_val.upper() for kw in ["KEY", "TOKEN", "SECRET", "PASSWORD"]):
+                        notes = ["Secret in Ollama systemd service file"]
+                        if mtime:
+                            notes.append(f"File last modified: {describe_staleness(mtime)}")
                         result.findings.append(CredentialFinding(
                             tool_name=self.name(),
                             credential_type="systemd_env_secret",
@@ -223,7 +248,10 @@ class OllamaScanner(BaseScanner):
                             raw_value=env_val if show_secrets else None,
                             file_permissions=perms,
                             file_owner=owner,
-                            notes=["Secret in Ollama systemd service file"],
+                            file_modified=mtime,
+                            remediation="Use environment variables securely",
+                            remediation_hint=hint_manual("Use environment variables securely"),
+                            notes=notes,
                         ))
 
     def _scan_config_dir(
@@ -239,6 +267,7 @@ class OllamaScanner(BaseScanner):
         for json_file in base_path.glob("*.json"):
             perms = get_file_permissions(json_file)
             owner = get_file_owner(json_file)
+            mtime = get_file_mtime(json_file)
 
             try:
                 data = json.loads(json_file.read_text(encoding="utf-8"))
@@ -249,6 +278,9 @@ class OllamaScanner(BaseScanner):
                 for key in ("api_key", "apiKey", "token", "auth_token", "password"):
                     value = data.get(key)
                     if value and isinstance(value, str) and len(value) > 8:
+                        notes = []
+                        if mtime:
+                            notes.append(f"File last modified: {describe_staleness(mtime)}")
                         result.findings.append(CredentialFinding(
                             tool_name=self.name(),
                             credential_type=key,
@@ -260,4 +292,8 @@ class OllamaScanner(BaseScanner):
                             raw_value=value if show_secrets else None,
                             file_permissions=perms,
                             file_owner=owner,
+                            file_modified=mtime,
+                            remediation="Use environment variables securely",
+                            remediation_hint=hint_manual("Use environment variables securely"),
+                            notes=notes,
                         ))

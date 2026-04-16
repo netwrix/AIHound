@@ -12,7 +12,8 @@ from aihound.core.platform import (
     detect_platform, Platform, get_home, get_wsl_windows_home, get_xdg_config,
 )
 from aihound.core.redactor import mask_value
-from aihound.core.permissions import get_file_permissions, get_file_owner, assess_risk
+from aihound.core.permissions import get_file_permissions, get_file_owner, assess_risk, get_file_mtime, describe_staleness
+from aihound.remediation import hint_migrate_to_env, hint_rotate_credential
 from aihound.scanners import register
 
 
@@ -91,6 +92,7 @@ class GeminiScanner(BaseScanner):
 
         perms = get_file_permissions(path)
         owner = get_file_owner(path)
+        mtime = get_file_mtime(path)
         storage = StorageType.PLAINTEXT_ENV
 
         try:
@@ -113,6 +115,9 @@ class GeminiScanner(BaseScanner):
                 value = value.strip().strip("'\"")
 
                 if key in gemini_keys and value:
+                    notes = ["From .env file"]
+                    if mtime:
+                        notes.append(f"File last modified: {describe_staleness(mtime)}")
                     result.findings.append(CredentialFinding(
                         tool_name=self.name(),
                         credential_type=f"env_file:{key}",
@@ -124,7 +129,10 @@ class GeminiScanner(BaseScanner):
                         raw_value=value if show_secrets else None,
                         file_permissions=perms,
                         file_owner=owner,
-                        notes=[f"From .env file"],
+                        file_modified=mtime,
+                        remediation="Use environment variables instead of .env files",
+                        remediation_hint=hint_migrate_to_env([], str(path)),
+                        notes=notes,
                     ))
 
     def _scan_adc(
@@ -135,6 +143,7 @@ class GeminiScanner(BaseScanner):
 
         perms = get_file_permissions(path)
         owner = get_file_owner(path)
+        mtime = get_file_mtime(path)
         storage = StorageType.PLAINTEXT_JSON
 
         try:
@@ -158,6 +167,8 @@ class GeminiScanner(BaseScanner):
                 notes = []
                 cred_kind = data.get("type", "unknown")
                 notes.append(f"Credential type: {cred_kind}")
+                if mtime:
+                    notes.append(f"File last modified: {describe_staleness(mtime)}")
 
                 result.findings.append(CredentialFinding(
                     tool_name=self.name(),
@@ -170,5 +181,10 @@ class GeminiScanner(BaseScanner):
                     raw_value=value if show_secrets else None,
                     file_permissions=perms,
                     file_owner=owner,
+                    file_modified=mtime,
+                    remediation="Rotate Application Default Credentials regularly",
+                    remediation_hint=hint_rotate_credential(
+                        "gcloud-adc", "Rotate Application Default Credentials regularly"
+                    ),
                     notes=notes,
                 ))

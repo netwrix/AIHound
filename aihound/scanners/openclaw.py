@@ -13,7 +13,8 @@ from aihound.core.platform import (
     detect_platform, Platform, get_home, get_wsl_windows_home,
 )
 from aihound.core.redactor import mask_value
-from aihound.core.permissions import get_file_permissions, get_file_owner, assess_risk
+from aihound.core.permissions import get_file_permissions, get_file_owner, assess_risk, get_file_mtime, describe_staleness
+from aihound.remediation import hint_manual
 from aihound.scanners import register
 
 logger = logging.getLogger("aihound.scanners.openclaw")
@@ -78,6 +79,7 @@ class OpenClawScanner(BaseScanner):
             logger.debug("Reading auth profiles: %s", auth_file)
             perms = get_file_permissions(auth_file)
             owner = get_file_owner(auth_file)
+            mtime = get_file_mtime(auth_file)
 
             try:
                 data = json.loads(auth_file.read_text(encoding="utf-8"))
@@ -88,7 +90,7 @@ class OpenClawScanner(BaseScanner):
 
             agent_name = agent_dir.name
             self._extract_secrets_recursive(
-                data, auth_file, perms, owner, result, show_secrets,
+                data, auth_file, perms, owner, mtime, result, show_secrets,
                 context=f"agent:{agent_name}",
             )
 
@@ -133,6 +135,7 @@ class OpenClawScanner(BaseScanner):
         logger.debug("Reading secrets.json: %s", path)
         perms = get_file_permissions(path)
         owner = get_file_owner(path)
+        mtime = get_file_mtime(path)
 
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
@@ -143,7 +146,7 @@ class OpenClawScanner(BaseScanner):
 
         if isinstance(data, dict):
             self._extract_secrets_recursive(
-                data, path, perms, owner, result, show_secrets,
+                data, path, perms, owner, mtime, result, show_secrets,
                 context="secrets.json",
             )
 
@@ -159,6 +162,7 @@ class OpenClawScanner(BaseScanner):
         logger.debug("Reading main config: %s", path)
         perms = get_file_permissions(path)
         owner = get_file_owner(path)
+        mtime = get_file_mtime(path)
 
         # openclaw.json is JSON5 but stdlib json handles most cases
         try:
@@ -184,6 +188,9 @@ class OpenClawScanner(BaseScanner):
                 if isinstance(auth, dict):
                     token = auth.get("token")
                     if token and isinstance(token, str) and len(token) > 8:
+                        notes = ["OpenClaw gateway auth token (inline)"]
+                        if mtime:
+                            notes.append(f"File last modified: {describe_staleness(mtime)}")
                         result.findings.append(CredentialFinding(
                             tool_name=self.name(),
                             credential_type="gateway_auth_token",
@@ -195,14 +202,20 @@ class OpenClawScanner(BaseScanner):
                             raw_value=token if show_secrets else None,
                             file_permissions=perms,
                             file_owner=owner,
-                            notes=["OpenClaw gateway auth token (inline)"],
+                            file_modified=mtime,
+                            remediation="Use SecretRef (env:, file:) instead of inline secrets",
+                            remediation_hint=hint_manual(
+                                "Use SecretRef (env:, file:) instead of inline secrets",
+                                suggested_format="env:VAR_NAME",
+                            ),
+                            notes=notes,
                         ))
 
             # Check channel configs for inline tokens
             channels = data.get("channels", {})
             if isinstance(channels, dict):
                 self._extract_secrets_recursive(
-                    channels, path, perms, owner, result, show_secrets,
+                    channels, path, perms, owner, mtime, result, show_secrets,
                     context="channels",
                 )
 
@@ -210,7 +223,7 @@ class OpenClawScanner(BaseScanner):
             agents = data.get("agents", {})
             if isinstance(agents, dict):
                 self._extract_secrets_recursive(
-                    agents, path, perms, owner, result, show_secrets,
+                    agents, path, perms, owner, mtime, result, show_secrets,
                     context="agents",
                 )
 
@@ -226,6 +239,7 @@ class OpenClawScanner(BaseScanner):
         logger.debug("Reading .env: %s", path)
         perms = get_file_permissions(path)
         owner = get_file_owner(path)
+        mtime = get_file_mtime(path)
         storage = StorageType.PLAINTEXT_ENV
 
         try:
@@ -243,6 +257,9 @@ class OpenClawScanner(BaseScanner):
                 key = key.strip()
                 value = value.strip().strip("'\"")
                 if value and any(p in key.upper() for p in secret_patterns):
+                    notes = ["From OpenClaw .env file"]
+                    if mtime:
+                        notes.append(f"File last modified: {describe_staleness(mtime)}")
                     result.findings.append(CredentialFinding(
                         tool_name=self.name(),
                         credential_type=f"env_file:{key}",
@@ -254,7 +271,13 @@ class OpenClawScanner(BaseScanner):
                         raw_value=value if show_secrets else None,
                         file_permissions=perms,
                         file_owner=owner,
-                        notes=["From OpenClaw .env file"],
+                        file_modified=mtime,
+                        remediation="Use SecretRef (env:, file:) instead of inline secrets",
+                        remediation_hint=hint_manual(
+                            "Use SecretRef (env:, file:) instead of inline secrets",
+                            suggested_format="env:VAR_NAME",
+                        ),
+                        notes=notes,
                     ))
 
     # --- Legacy oauth.json ---
@@ -269,6 +292,7 @@ class OpenClawScanner(BaseScanner):
         logger.debug("Reading legacy oauth.json: %s", path)
         perms = get_file_permissions(path)
         owner = get_file_owner(path)
+        mtime = get_file_mtime(path)
 
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
@@ -278,7 +302,7 @@ class OpenClawScanner(BaseScanner):
 
         if isinstance(data, dict):
             self._extract_secrets_recursive(
-                data, path, perms, owner, result, show_secrets,
+                data, path, perms, owner, mtime, result, show_secrets,
                 context="legacy_oauth",
             )
 
@@ -289,6 +313,7 @@ class OpenClawScanner(BaseScanner):
     ) -> None:
         perms = get_file_permissions(path)
         owner = get_file_owner(path)
+        mtime = get_file_mtime(path)
 
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
@@ -297,12 +322,12 @@ class OpenClawScanner(BaseScanner):
 
         if isinstance(data, dict):
             self._extract_secrets_recursive(
-                data, path, perms, owner, result, show_secrets,
+                data, path, perms, owner, mtime, result, show_secrets,
                 context=context,
             )
 
     def _extract_secrets_recursive(
-        self, data: dict, path: Path, perms, owner,
+        self, data: dict, path: Path, perms, owner, mtime,
         result: ScanResult, show_secrets: bool,
         context: str = "", depth: int = 0,
     ) -> None:
@@ -314,6 +339,12 @@ class OpenClawScanner(BaseScanner):
                 if self._is_secret_key(key) or self._looks_like_token(value):
                     # Skip SecretRef values (they reference external sources, not inline secrets)
                     if value.startswith("env:") or value.startswith("file:") or value.startswith("exec:"):
+                        notes = [
+                            f"Context: {context}" if context else "",
+                            "SecretRef (not inline — references external source)",
+                        ]
+                        if mtime:
+                            notes.append(f"File last modified: {describe_staleness(mtime)}")
                         result.findings.append(CredentialFinding(
                             tool_name=self.name(),
                             credential_type=f"secret_ref:{key}",
@@ -322,10 +353,8 @@ class OpenClawScanner(BaseScanner):
                             exists=True,
                             risk_level=RiskLevel.INFO,
                             value_preview=value,
-                            notes=[
-                                f"Context: {context}" if context else "",
-                                "SecretRef (not inline — references external source)",
-                            ],
+                            file_modified=mtime,
+                            notes=notes,
                         ))
                         continue
 
@@ -334,6 +363,8 @@ class OpenClawScanner(BaseScanner):
                     if context:
                         notes.append(f"Context: {context}")
                     notes.append("Plaintext credential in OpenClaw config")
+                    if mtime:
+                        notes.append(f"File last modified: {describe_staleness(mtime)}")
 
                     result.findings.append(CredentialFinding(
                         tool_name=self.name(),
@@ -346,19 +377,25 @@ class OpenClawScanner(BaseScanner):
                         raw_value=value if show_secrets else None,
                         file_permissions=perms,
                         file_owner=owner,
+                        file_modified=mtime,
+                        remediation="Use SecretRef (env:, file:) instead of inline secrets",
+                        remediation_hint=hint_manual(
+                            "Use SecretRef (env:, file:) instead of inline secrets",
+                            suggested_format="env:VAR_NAME",
+                        ),
                         notes=notes,
                     ))
 
             elif isinstance(value, dict):
                 self._extract_secrets_recursive(
-                    value, path, perms, owner, result, show_secrets,
+                    value, path, perms, owner, mtime, result, show_secrets,
                     context=context, depth=depth + 1,
                 )
             elif isinstance(value, list):
                 for item in value:
                     if isinstance(item, dict):
                         self._extract_secrets_recursive(
-                            item, path, perms, owner, result, show_secrets,
+                            item, path, perms, owner, mtime, result, show_secrets,
                             context=context, depth=depth + 1,
                         )
 

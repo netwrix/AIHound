@@ -19,7 +19,8 @@ from aihound.core.scanner import (
 )
 from aihound.core.platform import detect_platform, Platform, get_home, get_wsl_windows_home
 from aihound.core.redactor import mask_value
-from aihound.core.permissions import get_file_permissions, get_file_owner, assess_risk
+from aihound.core.permissions import get_file_permissions, get_file_owner, assess_risk, get_file_mtime, describe_staleness
+from aihound.remediation import hint_chmod
 from aihound.scanners import register
 
 
@@ -120,6 +121,7 @@ class ClaudeCodeScanner(BaseScanner):
     ) -> None:
         storage = StorageType.PLAINTEXT_JSON
         risk = assess_risk(storage, path)
+        mtime = get_file_mtime(path)
 
         # Check for various credential fields
         token_fields = [
@@ -140,6 +142,9 @@ class ClaudeCodeScanner(BaseScanner):
                 auth_type = data.get("type")
                 if auth_type:
                     notes.append(f"Auth type: {auth_type}")
+
+                if mtime:
+                    notes.append(f"File last modified: {describe_staleness(mtime)}")
 
                 # Check for expiry
                 expiry = None
@@ -167,7 +172,10 @@ class ClaudeCodeScanner(BaseScanner):
                     raw_value=value if show_secrets else None,
                     file_permissions=perms,
                     file_owner=owner,
+                    file_modified=mtime,
                     expiry=expiry,
+                    remediation=f"Restrict file permissions: chmod 600 {path}",
+                    remediation_hint=hint_chmod("600", str(path)),
                     notes=notes,
                 ))
 
@@ -188,6 +196,7 @@ class ClaudeCodeScanner(BaseScanner):
         logger.debug("Reading config file: %s", path)
         perms = get_file_permissions(path)
         owner = get_file_owner(path)
+        mtime = get_file_mtime(path)
 
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
@@ -216,6 +225,8 @@ class ClaudeCodeScanner(BaseScanner):
                 # Check if this looks like it contains a secret
                 if self._looks_like_secret(env_key, env_value):
                     notes = [f"MCP server: {server_name}"]
+                    if mtime:
+                        notes.append(f"File last modified: {describe_staleness(mtime)}")
 
                     result.findings.append(CredentialFinding(
                         tool_name=self.name(),
@@ -228,6 +239,9 @@ class ClaudeCodeScanner(BaseScanner):
                         raw_value=env_value if show_secrets else None,
                         file_permissions=perms,
                         file_owner=owner,
+                        file_modified=mtime,
+                        remediation=f"Restrict file permissions: chmod 600 {path}",
+                        remediation_hint=hint_chmod("600", str(path)),
                         notes=notes,
                     ))
 

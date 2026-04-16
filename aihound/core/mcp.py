@@ -9,7 +9,14 @@ from typing import Optional
 
 from aihound.core.scanner import CredentialFinding, StorageType, RiskLevel
 from aihound.core.redactor import mask_value
-from aihound.core.permissions import get_file_permissions, get_file_owner, assess_risk
+from aihound.core.permissions import (
+    get_file_permissions,
+    get_file_owner,
+    assess_risk,
+    get_file_mtime,
+    describe_staleness,
+)
+from aihound.remediation import hint_manual, hint_migrate_to_env
 
 logger = logging.getLogger("aihound.core.mcp")
 
@@ -56,6 +63,13 @@ def parse_mcp_config(
 
                 if _is_env_var_reference(value):
                     # This references an external env var, not an inline secret
+                    mtime = get_file_mtime(source_path)
+                    notes = [
+                        f"MCP server: {server_name}",
+                        "References environment variable (not inline secret)",
+                    ]
+                    if mtime is not None:
+                        notes.append(f"Config last modified {describe_staleness(mtime)}")
                     findings.append(CredentialFinding(
                         tool_name=tool_name,
                         credential_type=f"mcp_env_ref:{key}",
@@ -64,12 +78,18 @@ def parse_mcp_config(
                         exists=True,
                         risk_level=RiskLevel.INFO,
                         value_preview=value,
-                        notes=[
-                            f"MCP server: {server_name}",
-                            "References environment variable (not inline secret)",
-                        ],
+                        notes=notes,
+                        file_modified=mtime,
+                        remediation="Verify env var is set in a secure environment, not committed to source",
+                        remediation_hint=hint_manual(
+                            "Verify env var is set in a secure environment, not committed to source"
+                        ),
                     ))
                 elif _looks_like_secret_key(key) or _looks_like_secret_value(value):
+                    mtime = get_file_mtime(source_path)
+                    notes = [f"MCP server: {server_name}", "Inline secret in config"]
+                    if mtime is not None:
+                        notes.append(f"Config last modified {describe_staleness(mtime)}")
                     findings.append(CredentialFinding(
                         tool_name=tool_name,
                         credential_type=f"mcp_env:{key}",
@@ -81,7 +101,10 @@ def parse_mcp_config(
                         raw_value=value if show_secrets else None,
                         file_permissions=perms,
                         file_owner=owner,
-                        notes=[f"MCP server: {server_name}", "Inline secret in config"],
+                        notes=notes,
+                        file_modified=mtime,
+                        remediation="Move secret to environment variable or secret manager",
+                        remediation_hint=hint_migrate_to_env([], str(source_path)),
                     ))
 
         # Check headers block (for HTTP transport MCP servers)
@@ -93,6 +116,13 @@ def parse_mcp_config(
                 key_lower = key.lower()
                 if key_lower in ("authorization", "x-api-key", "api-key"):
                     if _is_env_var_reference(value):
+                        mtime = get_file_mtime(source_path)
+                        notes = [
+                            f"MCP server: {server_name}",
+                            "References environment variable",
+                        ]
+                        if mtime is not None:
+                            notes.append(f"Config last modified {describe_staleness(mtime)}")
                         findings.append(CredentialFinding(
                             tool_name=tool_name,
                             credential_type=f"mcp_header:{key}",
@@ -101,12 +131,18 @@ def parse_mcp_config(
                             exists=True,
                             risk_level=RiskLevel.INFO,
                             value_preview=value,
-                            notes=[
-                                f"MCP server: {server_name}",
-                                "References environment variable",
-                            ],
+                            notes=notes,
+                            file_modified=mtime,
+                            remediation="Verify env var is set in a secure environment, not committed to source",
+                            remediation_hint=hint_manual(
+                                "Verify env var is set in a secure environment, not committed to source"
+                            ),
                         ))
                     else:
+                        mtime = get_file_mtime(source_path)
+                        notes = [f"MCP server: {server_name}", "Inline auth header"]
+                        if mtime is not None:
+                            notes.append(f"Config last modified {describe_staleness(mtime)}")
                         findings.append(CredentialFinding(
                             tool_name=tool_name,
                             credential_type=f"mcp_header:{key}",
@@ -118,7 +154,10 @@ def parse_mcp_config(
                             raw_value=value if show_secrets else None,
                             file_permissions=perms,
                             file_owner=owner,
-                            notes=[f"MCP server: {server_name}", "Inline auth header"],
+                            notes=notes,
+                            file_modified=mtime,
+                            remediation="Move secret to environment variable or secret manager",
+                            remediation_hint=hint_migrate_to_env([], str(source_path)),
                         ))
 
         # Check args for tokens (some MCP servers pass tokens as CLI args)
@@ -128,6 +167,10 @@ def parse_mcp_config(
                 if not isinstance(arg, str):
                     continue
                 if _looks_like_secret_value(arg) and not arg.startswith("-"):
+                    mtime = get_file_mtime(source_path)
+                    notes = [f"MCP server: {server_name}", f"Token in CLI arg position {i}"]
+                    if mtime is not None:
+                        notes.append(f"Config last modified {describe_staleness(mtime)}")
                     findings.append(CredentialFinding(
                         tool_name=tool_name,
                         credential_type=f"mcp_arg[{i}]",
@@ -139,7 +182,10 @@ def parse_mcp_config(
                         raw_value=arg if show_secrets else None,
                         file_permissions=perms,
                         file_owner=owner,
-                        notes=[f"MCP server: {server_name}", f"Token in CLI arg position {i}"],
+                        notes=notes,
+                        file_modified=mtime,
+                        remediation="Move secret to environment variable or secret manager",
+                        remediation_hint=hint_migrate_to_env([], str(source_path)),
                     ))
 
     return findings
