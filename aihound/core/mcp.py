@@ -28,6 +28,42 @@ SECRET_KEY_PATTERNS = [
     "bearer", "jwt",
 ]
 
+# Env var names that are NEVER secrets — runtime/path/locale plumbing.
+# Skip the secret heuristic entirely for these to suppress false positives like
+# `PYTHONPATH=C:\Users\...\aicreds` getting flagged as a credential.
+# Names are matched case-insensitively. Add new entries when a real-world
+# false positive shows up.
+KNOWN_NON_SECRET_KEYS = {
+    # PATH-family
+    "PATH", "PYTHONPATH", "NODE_PATH", "CLASSPATH",
+    "LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH",
+    "GOPATH", "GOROOT", "GOBIN", "CARGO_HOME", "RUSTUP_HOME",
+    # User / session identity
+    "HOME", "USER", "USERNAME", "LOGNAME", "USERPROFILE",
+    "HOMEDRIVE", "HOMEPATH",
+    # Locale / timezone
+    "LANG", "LANGUAGE", "LC_ALL", "LC_CTYPE", "LC_MESSAGES",
+    "LC_NUMERIC", "LC_TIME", "LC_COLLATE", "LC_MONETARY",
+    "TZ",
+    # Temp / runtime dirs
+    "TMP", "TMPDIR", "TEMP", "XDG_RUNTIME_DIR", "XDG_CACHE_HOME",
+    "XDG_CONFIG_HOME", "XDG_DATA_HOME",
+    # Shell + display
+    "SHELL", "TERM", "TERM_PROGRAM", "PWD", "OLDPWD",
+    "DISPLAY", "WAYLAND_DISPLAY", "COLORTERM",
+    # Logging / debug flags (boolean-ish, harmless)
+    "DEBUG", "VERBOSE", "LOG_LEVEL", "LOGLEVEL",
+    "PYTHONUNBUFFERED", "PYTHONDONTWRITEBYTECODE",
+    "NODE_ENV", "RUST_LOG", "RUST_BACKTRACE",
+    # Node-specific
+    "NODE_OPTIONS", "NPM_CONFIG_PREFIX",
+    # CI / orchestration noise
+    "CI", "GITHUB_ACTIONS", "RUNNER_OS",
+    # Misc OS plumbing
+    "OS", "OSTYPE", "MACHTYPE", "PROCESSOR_ARCHITECTURE",
+    "SYSTEMROOT", "WINDIR", "COMSPEC",
+}
+
 # Env var references that are NOT inline secrets (they reference external vars)
 ENV_VAR_REFERENCE_PATTERN = "${"
 
@@ -59,6 +95,10 @@ def parse_mcp_config(
         if isinstance(env, dict):
             for key, value in env.items():
                 if not isinstance(value, str):
+                    continue
+
+                # Allowlist: PATH-family / locale / shell vars are never secrets
+                if key.upper() in KNOWN_NON_SECRET_KEYS:
                     continue
 
                 if _is_env_var_reference(value):
@@ -234,6 +274,9 @@ def _looks_like_secret_value(value: str) -> bool:
     if len(value) < 20:
         return False
     if value.startswith("/") or value.startswith("http"):
+        return False
+    # Windows paths: drive letter + colon + separator (e.g. C:\foo, d:/bar)
+    if len(value) >= 3 and value[0].isalpha() and value[1] == ":" and value[2] in ("\\", "/"):
         return False
     alphanumeric_ratio = sum(c.isalnum() or c in "-_." for c in value) / len(value)
     return alphanumeric_ratio > 0.8
