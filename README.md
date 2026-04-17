@@ -480,34 +480,6 @@ The `@register` decorator auto-discovers it. No other files need editing.
 
 See `Full-Technical-Doc.md` for complete technical reference — every scanner's paths, detection logic, storage types, and remediation strings documented in detail.
 
-## Project Structure
-
-```
-aihound/
-├── core/
-│   ├── scanner.py       # BaseScanner, CredentialFinding, ScanResult, enums
-│   ├── platform.py      # OS detection (Linux/macOS/Windows/WSL), path resolution
-│   ├── redactor.py      # Secret masking with known prefix detection
-│   ├── permissions.py   # File permission analysis + human-readable descriptions
-│   └── mcp.py           # Shared MCP config parser (used by multiple scanners)
-├── scanners/            # One file per tool, auto-discovered via @register
-├── output/
-│   ├── table.py         # CLI table with ANSI colors
-│   ├── json_export.py   # JSON report
-│   └── html_report.py   # Self-contained HTML report with embedded banner
-└── utils/
-    ├── keychain.py      # macOS Keychain queries
-    ├── credman.py       # Windows Credential Manager queries
-    └── vscdb.py         # VS Code SQLite state.vscdb reader
-```
-
-## Security & Ethics
-
-This tool is for **authorized security research, penetration testing, and defensive security assessments only**. Use it on systems you own or have explicit authorization to test.
-
-- Credentials are **redacted by default** — `--show-secrets` requires explicit `YES` confirmation
-- The tool is **read-only** — it never modifies, exfiltrates, or transmits any credentials
-- JSON output **never includes raw values** even with `--show-secrets`
 
 ## MCP Server Mode (v3.0.0)
 
@@ -569,7 +541,12 @@ Verify after install by opening a new terminal and running `python --version` ag
 In your terminal, run:
 
 ```
-pip install aihound[mcp]
+cd AIHound
+pip install .[mcp]
+```
+Or if you want to install it in editable/dev mode:
+```
+ pip install -e .[mcp]
 ```
 
 This installs both AIHound and the `mcp` Python SDK that lets AI assistants talk to it.
@@ -806,6 +783,37 @@ Seven action types: `chmod`, `migrate_to_env`, `change_config_value`, `run_comma
 > You: "Scan my system for AI credential exposure and fix anything CRITICAL."
 >
 > Claude: calls `aihound_scan(min_risk="critical")` → gets back 4 findings with `remediation_hint` dicts → reads each hint → runs `chmod 600 ~/.claude/.credentials.json` via its filesystem tool → calls `aihound_scan(force=True)` to verify → reports back.
+
+
+## Project Structure
+
+```
+aihound/
+├── core/
+│   ├── scanner.py       # BaseScanner, CredentialFinding, ScanResult, enums
+│   ├── platform.py      # OS detection (Linux/macOS/Windows/WSL), path resolution
+│   ├── redactor.py      # Secret masking with known prefix detection
+│   ├── permissions.py   # File permission analysis + human-readable descriptions
+│   └── mcp.py           # Shared MCP config parser (used by multiple scanners)
+├── scanners/            # One file per tool, auto-discovered via @register
+├── output/
+│   ├── table.py         # CLI table with ANSI colors
+│   ├── json_export.py   # JSON report
+│   └── html_report.py   # Self-contained HTML report with embedded banner
+└── utils/
+    ├── keychain.py      # macOS Keychain queries
+    ├── credman.py       # Windows Credential Manager queries
+    └── vscdb.py         # VS Code SQLite state.vscdb reader
+```
+
+## Security & Ethics
+
+This tool is for **authorized security research, penetration testing, and defensive security assessments only**. Use it on systems you own or have explicit authorization to test.
+
+- Credentials are **redacted by default** — `--show-secrets` requires explicit `YES` confirmation
+- The tool is **read-only** — it never modifies, exfiltrates, or transmits any credentials
+- JSON output **never includes raw values** even with `--show-secrets`
+
 
 ---
 
