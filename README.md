@@ -274,6 +274,31 @@ cd pyinstaller
 python build.py --clean
 ```
 
+## CLI Reference
+
+All flags are the same across all three versions:
+
+| Flag | Description |
+|------|-------------|
+| `--version` | Show version and exit |
+| `--show-secrets` | Display actual credential values (requires interactive "YES" confirmation) |
+| `--json` | Output JSON to stdout |
+| `--json-file PATH` | Write JSON report to file (creates parent dirs, expands `~`) |
+| `--html-file PATH` | Write HTML report to file (creates parent dirs, expands `~`) |
+| `--banner PATH` | Custom banner image for HTML report |
+| `--tools TOOL ...` | Only scan specified tools (by slug) |
+| `--list-tools` | List all available scanners |
+| `-v`, `--verbose` | Show debug output, permissions, and stack traces |
+| `--no-color` | Disable ANSI color codes |
+| `--watch` | Run continuously, alert on changes (Ctrl+C to stop) |
+| `--interval SECONDS` | Watch polling interval (default: 30) |
+| `--watch-log PATH` | Append watch events as NDJSON to file |
+| `--notify` | Fire OS-native desktop notifications for watch events |
+| `--notify-min-risk LEVEL` | Minimum risk to notify on (default: `high`) |
+| `--min-risk LEVEL` | Minimum risk to emit as watch events (default: `info`) |
+| `--debounce SECONDS` | Suppress duplicate events within window (default: 10) |
+| `--mcp` | Run as MCP stdio server (requires `pip install aihound[mcp]`) |
+
 ---
 
 ## Watch / Monitor Mode (v3.0.0)
@@ -335,30 +360,6 @@ Pipe into `jq`, `grep`, a log shipper, a SIEM, whatever.
 
 ---
 
-## CLI Reference
-
-All flags are the same across all three versions:
-
-| Flag | Description |
-|------|-------------|
-| `--version` | Show version and exit |
-| `--show-secrets` | Display actual credential values (requires interactive "YES" confirmation) |
-| `--json` | Output JSON to stdout |
-| `--json-file PATH` | Write JSON report to file (creates parent dirs, expands `~`) |
-| `--html-file PATH` | Write HTML report to file (creates parent dirs, expands `~`) |
-| `--banner PATH` | Custom banner image for HTML report |
-| `--tools TOOL ...` | Only scan specified tools (by slug) |
-| `--list-tools` | List all available scanners |
-| `-v`, `--verbose` | Show debug output, permissions, and stack traces |
-| `--no-color` | Disable ANSI color codes |
-| `--watch` | Run continuously, alert on changes (Ctrl+C to stop) |
-| `--interval SECONDS` | Watch polling interval (default: 30) |
-| `--watch-log PATH` | Append watch events as NDJSON to file |
-| `--notify` | Fire OS-native desktop notifications for watch events |
-| `--notify-min-risk LEVEL` | Minimum risk to notify on (default: `high`) |
-| `--min-risk LEVEL` | Minimum risk to emit as watch events (default: `info`) |
-| `--debounce SECONDS` | Suppress duplicate events within window (default: 10) |
-| `--mcp` | Run as MCP stdio server (requires `pip install aihound[mcp]`) |
 
 ### Available Scanners (25 total)
 
