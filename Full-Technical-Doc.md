@@ -1332,7 +1332,7 @@ This document describes AIHound at the v0.1.0 codebase. As new scanners, feature
 - **v2 features** — Added 10 new scanners (`aider`, `huggingface`, `openai_cli`, `git_credentials`, `ml_platforms`, `network_exposure`, `docker`, `jupyter`, `vscode_extensions`, `browser_sessions`), plus the `PLAINTEXT_FILE` storage type, `file_modified` and `remediation` fields on `CredentialFinding`, staleness tracking, and remediation guidance across all output formats.
 - **PowerShell scanner** — Added `powershell` scanner for PSReadLine history and transcripts with two-pass regex detection (known prefixes + context patterns).
 
-### Post-v3.0.0 additions (current)
+### v3.1.0 additions (current)
 
 - **Shell History scanner** (`shell-history`) — bash, zsh, fish history with two-pass regex (known-prefix + context), per-shell remediation.
 - **Shell RC Files scanner** (`shell-rc`) — `.bashrc`/`.zshrc`/fish config/PowerShell profiles/`.env` files for hardcoded `export VAR=secret` patterns. Multi-pattern regex per file type.
