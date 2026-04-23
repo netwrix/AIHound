@@ -8,8 +8,9 @@ import (
 	"aihound/remediation"
 )
 
-// aiEnvVars maps environment variable names to human-readable descriptions.
-var aiEnvVars = map[string]string{
+// AIEnvVars maps environment variable names to human-readable descriptions.
+// Exported so other scanners (persistent_env, shell_rc) can reference the list.
+var AIEnvVars = map[string]string{
 	// Anthropic / Claude
 	"ANTHROPIC_API_KEY":        "Anthropic API key",
 	"ANTHROPIC_AUTH_TOKEN":     "Anthropic auth token (Bearer)",
@@ -78,7 +79,7 @@ func (s *envVarScanner) IsApplicable() bool { return true }
 func (s *envVarScanner) Scan(showSecrets bool) core.ScanResult {
 	result := core.ScanResult{ScannerName: s.Name(), Platform: core.DetectPlatform().String()}
 
-	for varName, description := range aiEnvVars {
+	for varName, description := range AIEnvVars {
 		value := os.Getenv(varName)
 		if value == "" {
 			continue
