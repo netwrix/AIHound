@@ -51,6 +51,10 @@ hidden_imports = [
     'aihound.scanners.vscode_extensions',
     'aihound.scanners.browser_sessions',
     'aihound.scanners.powershell',
+    'aihound.scanners.persistent_env',
+    'aihound.scanners.shell_history',
+    'aihound.scanners.shell_rc',
+    'aihound.scanners.claude_sessions',
     # v3 watch + MCP infrastructure
     'aihound.watch',
     'aihound.notifications',
