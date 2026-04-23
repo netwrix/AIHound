@@ -1320,7 +1320,7 @@ When `--mcp` is set, `main()` routes immediately to `_run_mcp_mode()` which:
 
 This document describes AIHound at the v0.1.0 codebase. As new scanners, features, and output formats are added, append new sections here rather than creating separate docs.
 
-### v3.0.0 (current)
+### v3.0.0 
 
 - **Watch / Monitor mode** — Continuous scanning with event-based alerting. New CLI flags (`--watch`, `--interval`, `--watch-log`, `--notify`, `--notify-min-risk`, `--min-risk`, `--debounce`). New modules: `aihound/watch.py`, `aihound/notifications.py`, `aihound/output/watch_formatters.py`. See "Watch / Monitor Mode" section above for full technical details.
 - **MCP Server mode** — Exposes scanners to AI assistants over Model Context Protocol. New `--mcp` flag, new modules: `aihound/mcp_server.py`, `aihound/remediation.py`. New `remediation_hint` field on `CredentialFinding` carries machine-readable fix actions. Optional dependency: `pip install aihound[mcp]`. See "MCP Server Mode" section above.
@@ -1332,7 +1332,7 @@ This document describes AIHound at the v0.1.0 codebase. As new scanners, feature
 - **v2 features** — Added 10 new scanners (`aider`, `huggingface`, `openai_cli`, `git_credentials`, `ml_platforms`, `network_exposure`, `docker`, `jupyter`, `vscode_extensions`, `browser_sessions`), plus the `PLAINTEXT_FILE` storage type, `file_modified` and `remediation` fields on `CredentialFinding`, staleness tracking, and remediation guidance across all output formats.
 - **PowerShell scanner** — Added `powershell` scanner for PSReadLine history and transcripts with two-pass regex detection (known prefixes + context patterns).
 
-### Post-v3.0.0 additions
+### Post-v3.0.0 additions (current)
 
 - **Shell History scanner** (`shell-history`) — bash, zsh, fish history with two-pass regex (known-prefix + context), per-shell remediation.
 - **Shell RC Files scanner** (`shell-rc`) — `.bashrc`/`.zshrc`/fish config/PowerShell profiles/`.env` files for hardcoded `export VAR=secret` patterns. Multi-pattern regex per file type.
