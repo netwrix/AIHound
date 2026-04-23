@@ -128,6 +128,7 @@ def assess_risk(storage_type: StorageType, path: Optional[Path] = None) -> RiskL
         StorageType.PLAINTEXT_YAML,
         StorageType.PLAINTEXT_ENV,
         StorageType.PLAINTEXT_INI,
+        StorageType.PLAINTEXT_FILE,
     ):
         if path and path.exists():
             if is_world_readable(path):
