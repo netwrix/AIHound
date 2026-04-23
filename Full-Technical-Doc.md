@@ -2,8 +2,8 @@
 
 A comprehensive technical reference for AIHound, an AI credential and secrets scanner. This document describes every scanner, what it checks, where it checks, and how findings are classified. It is a living document — add new sections as the tool evolves.
 
-**Current version:** 0.1.0
-**Scanner count:** 25
+**Current version:** 3.0.0
+**Scanner count:** 29
 **Supported platforms:** Windows, macOS, Linux, WSL (Windows Subsystem for Linux)
 
 ---
@@ -52,7 +52,7 @@ aihound/
 │   ├── redactor.py     # Credential masking with known prefix table
 │   ├── permissions.py  # File permission analysis + risk assessment
 │   └── mcp.py          # Shared MCP config parser (used by 5 scanners)
-├── scanners/           # 25 scanner plugins, auto-discovered via @register
+├── scanners/           # 29 scanner plugins, auto-discovered via @register
 │   ├── __init__.py     # Scanner registry (pkgutil.iter_modules discovery)
 │   └── <scanner>.py    # One file per scanner
 ├── output/
@@ -923,6 +923,93 @@ Ports 11434 (Ollama) and 1234 (LM Studio) are handled by their dedicated scanner
 
 ---
 
+### 26. Shell History (`shell-history`)
+
+**What it scans:** Bash, zsh, and fish history files for credential tokens.
+
+| Platform | Paths |
+|----------|-------|
+| Linux/macOS/WSL | `~/.bash_history`, `~/.zsh_history`, `~/.zhistory`, `~/.local/share/fish/fish_history` |
+| WSL | Also checks `$ZDOTDIR/.zsh_history` if set |
+| Windows | Not applicable (PowerShell scanner covers Windows) |
+
+**Detection:** Two-pass regex (identical to PowerShell scanner):
+- Pass 1: Known credential prefixes + 16+ chars
+- Pass 2: Context patterns (`export VAR=`, `Authorization: Bearer`, etc.)
+
+Per-shell remediation: bash → `rm ~/.bash_history && history -c`; zsh → `rm ~/.zsh_history`; fish → `rm ~/.local/share/fish/fish_history`.
+
+**Storage:** `PLAINTEXT_FILE`
+
+---
+
+### 27. Shell RC Files (`shell-rc`)
+
+**What it scans:** Shell configuration and `.env` files for hardcoded credential assignments.
+
+| Platform | RC files | .env files |
+|----------|----------|------------|
+| Linux/macOS/WSL | `.bashrc`, `.bash_profile`, `.profile`, `.zshrc`, `.zprofile`, `.zshenv`, fish `config.fish` | `~/.env`, `~/.config/.env`, `~/.docker/.env` |
+| Windows | PowerShell profiles (`Documents/PowerShell/Microsoft.PowerShell_profile.ps1`) | `~/.env` |
+| WSL | Both Linux RC + Windows PowerShell profiles | Both |
+
+**Detection:** Multi-pattern regex per file type:
+- bash/zsh: `export VAR=value`
+- fish: `set -gx VAR value`
+- PowerShell: `$env:VAR = value`
+- .env: `VAR=value`
+- Plus raw known-prefix token pass
+
+Only flags assignments where the variable name is in `AI_ENV_VARS` OR the value matches a known credential prefix.
+
+**Storage:** `PLAINTEXT_ENV` for .env files, `PLAINTEXT_FILE` for RC files
+
+**Remediation:** `"Remove credentials from shell config files. Use a secret manager or source a gitignored file instead."`
+
+---
+
+### 28. Persistent Environment (`persistent-env`)
+
+**What it scans:** OS-level persistent environment variable stores that survive reboots.
+
+| Platform | Sources |
+|----------|---------|
+| Linux/WSL | `/etc/environment`, `/etc/profile.d/*.sh`, `~/.pam_environment`, `~/.config/environment.d/*.conf` |
+| macOS | `~/Library/LaunchAgents/*.plist`, `/Library/LaunchDaemons/*.plist`, `/etc/launchd.conf` |
+| Windows/WSL | Registry via `reg.exe query HKCU\Environment` and `HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment` |
+
+**Detection:** Regex patterns per file format (key=value, export, PAM, plist EnvironmentVariables dict, reg.exe output). Only flags variables in `AI_ENV_VARS` or matching known credential prefixes.
+
+**Risk:** System-level (`/etc/`, HKLM, LaunchDaemons) → CRITICAL; User-level → HIGH.
+
+**Storage:** `PLAINTEXT_FILE`, `PLAINTEXT_ENV`, `PLAINTEXT_INI` (registry)
+
+**Remediation:** `"Remove credential from persistent environment store and use a secret manager"` / PowerShell `SetEnvironmentVariable($null)` for registry entries.
+
+---
+
+### 29. Claude Sessions (`claude-sessions`)
+
+**What it scans:** Active Claude Code sessions, live tokens, and remote-control indicators.
+
+**Detection layers:**
+
+1. **Running processes** — `ps aux` (Unix) or `tasklist.exe` (Windows) for `claude` processes. Cross-references with `who` to detect SSH-originated sessions (walks process tree looking for `sshd` parent). SSH-originated → HIGH; local → MEDIUM.
+
+2. **Session files** — `~/.claude/sessions/*.json` parsed for `pid`, `sessionId`, `cwd`, `startedAt`. Cross-references PID with live processes. Active → MEDIUM; stale → INFO.
+
+3. **Live OAuth tokens** — `~/.claude/.credentials.json` → `claudeAiOauth.accessToken` + `expiresAt`. Non-expired token + running claude process → HIGH. Non-expired but no process → MEDIUM.
+
+4. **tmux/screen sessions** — Detects Claude running inside terminal multiplexers (persistent access that survives SSH disconnect). Checks `tmux list-sessions` + `tmux list-panes` and `screen -ls` + child process inspection. Both → HIGH.
+
+5. **Claude MCP server on 0.0.0.0** — `ss -tlnp` for claude/node listening on wildcard. CRITICAL (network-exposed remote code execution via Claude's tools). Linux/WSL only.
+
+**Storage:** `UNKNOWN` (process-based), `PLAINTEXT_JSON` (session files + credentials)
+
+**Remediation:** Process-specific: `kill <pid>`, `tmux kill-session -t <name>`, `screen -S <id> -X quit`, `claude logout`. MCP exposure: bind to 127.0.0.1.
+
+---
+
 ## Common Patterns
 
 ### Registration pattern
@@ -1169,7 +1256,7 @@ stdio only. Newline-delimited JSON-RPC 2.0 over stdin/stdout. stderr is reserved
 | Tool | Args | Purpose |
 |------|------|---------|
 | `aihound_scan` | `tools?: list[str]`, `min_risk?: str`, `force?: bool` | Run scanners, return findings with opaque `finding_id`. Cached 30s unless `force=True` |
-| `aihound_list_scanners` | — | Enumerate 25 scanners with `{slug, name, applicable}` |
+| `aihound_list_scanners` | — | Enumerate 29 scanners with `{slug, name, applicable}` |
 | `aihound_get_remediation` | `finding_id: str` | Fetch remediation + hint for a finding. Looks up across all cached scan sessions |
 | `aihound_check` | `tool: str`, `credential_type?: str` | Run one scanner, bypass cache |
 
@@ -1194,7 +1281,7 @@ Added in v3.0.0. An `Optional[dict]` alongside the human-readable `remediation` 
 | `rotate_credential` | `provider: str`, `description: str` | `{"action": "rotate_credential", "provider": "anthropic", "description": "Rotate via console.anthropic.com"}` |
 | `manual` | `description: str` (plus any extra fields) | `{"action": "manual", "description": "…", "suggested_tools": ["vault"]}` |
 
-The `hint_network_bind(service, path?, port?)` helper produces a specialized `change_config_value` dict with `bind_address → 127.0.0.1` and service context. All 25 scanners and `core/mcp.py` populate `remediation_hint` via these helpers.
+The `hint_network_bind(service, path?, port?)` helper produces a specialized `change_config_value` dict with `bind_address → 127.0.0.1` and service context. All 29 scanners and `core/mcp.py` populate `remediation_hint` via these helpers.
 
 ### Finding ID
 
@@ -1244,6 +1331,16 @@ This document describes AIHound at the v0.1.0 codebase. As new scanners, feature
 
 - **v2 features** — Added 10 new scanners (`aider`, `huggingface`, `openai_cli`, `git_credentials`, `ml_platforms`, `network_exposure`, `docker`, `jupyter`, `vscode_extensions`, `browser_sessions`), plus the `PLAINTEXT_FILE` storage type, `file_modified` and `remediation` fields on `CredentialFinding`, staleness tracking, and remediation guidance across all output formats.
 - **PowerShell scanner** — Added `powershell` scanner for PSReadLine history and transcripts with two-pass regex detection (known prefixes + context patterns).
+
+### Post-v3.0.0 additions
+
+- **Shell History scanner** (`shell-history`) — bash, zsh, fish history with two-pass regex (known-prefix + context), per-shell remediation.
+- **Shell RC Files scanner** (`shell-rc`) — `.bashrc`/`.zshrc`/fish config/PowerShell profiles/`.env` files for hardcoded `export VAR=secret` patterns. Multi-pattern regex per file type.
+- **Persistent Environment scanner** (`persistent-env`) — OS-level persistent env stores: Linux `/etc/environment`, `/etc/profile.d/`, PAM, systemd `environment.d`; macOS LaunchAgents/Daemons plists; Windows registry via `reg.exe`.
+- **Claude Sessions scanner** (`claude-sessions`) — active Claude Code process detection (local + SSH-originated), `~/.claude/sessions/` file cross-referencing, live OAuth token detection, tmux/screen session detection, Claude MCP server network exposure.
+- **KNOWN_NON_SECRET_KEYS allowlist** — defense-in-depth for MCP config parser: PYTHONPATH, PATH, HOME, LANG, etc. are never flagged as inline secrets.
+- **Windows-path false positive fix** — `_looks_like_secret_value` now rejects `C:\...` paths in both Python and Go.
+- **Scanner registry regression guard** — `tests/test_scanner_registry.py` asserts file count matches registered count and slugs are unique.
 
 ### Pending / Future work
 

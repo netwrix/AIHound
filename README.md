@@ -24,7 +24,11 @@ AIHound doesn't just look for API keys. It scans for:
 - **Jupyter server configs** — unauthenticated tokens, empty passwords, kernel env secrets
 - **VS Code extension secrets** — tokens stored in extension globalStorage beyond Copilot/Cline
 - **Browser AI sessions** — Firefox localStorage for claude.ai, chatgpt.com, gemini, etc.
+- **Shell history** — bash, zsh, fish history files scanned for pasted API keys and tokens
 - **PowerShell history** — API keys and tokens pasted into PSReadLine history or transcripts
+- **Shell RC files** — `.bashrc`, `.zshrc`, fish config, PowerShell profiles, `.env` files with hardcoded `export VAR=secret` patterns
+- **Persistent environment stores** — `/etc/environment`, `/etc/profile.d/`, `~/.pam_environment`, systemd `environment.d`, macOS LaunchAgent plists, Windows registry (`HKCU\Environment`, `HKLM\...\Environment`)
+- **Active Claude sessions** — detects running Claude Code processes, live OAuth tokens, tmux/screen sessions hosting Claude, SSH-originated sessions, and Claude MCP servers on `0.0.0.0`
 - **Local AI server exposure** — detects Ollama, LM Studio, Jupyter, Gradio, vLLM, LocalAI, Open WebUI, ComfyUI listening on all interfaces without authentication
 - **Environment variables** — 35+ known AI-related env vars
 - **Plaintext config files** — `.env` files, JSON configs with hardcoded secrets
@@ -33,7 +37,7 @@ Every finding includes **actionable remediation guidance** and **file staleness*
 
 ## Supported Tools
 
-**25 scanners** covering AI assistants, CLI tools, developer tools, and infrastructure:
+**29 scanners** covering AI assistants, CLI tools, developer tools, and infrastructure:
 
 ### AI Assistants & Desktop Apps
 | Tool | What's Scanned |
@@ -71,12 +75,24 @@ Every finding includes **actionable remediation guidance** and **file staleness*
 | **Jupyter** | Notebook/server configs (`.py` + `.json`), kernel env secrets, empty-token detection |
 | **AI Network Exposure** | Detects Jupyter (8888), Gradio (7860), vLLM (8000), LocalAI (8080), Open WebUI (3000), ComfyUI (8188) bound to `0.0.0.0` |
 
+### Shell & History
+| Tool | What's Scanned |
+|---|---|
+| **Shell History** | `~/.bash_history`, `~/.zsh_history`, fish history — two-pass regex (known-prefix + context-based) |
+| **PowerShell Logs** | PSReadLine `ConsoleHost_history.txt`, transcripts — detects tokens typed or pasted at the command line |
+| **Shell RC Files** | `.bashrc`, `.zshrc`, `.zprofile`, fish `config.fish`, PowerShell profiles, `.env` files — scans `export VAR=secret` patterns |
+| **Persistent Environment** | `/etc/environment`, `/etc/profile.d/*.sh`, `~/.pam_environment`, systemd `environment.d`, macOS LaunchAgents, Windows registry |
+
+### Active Sessions & Runtime
+| Tool | What's Scanned |
+|---|---|
+| **Claude Sessions** | Running `claude` processes (local + SSH-originated), `~/.claude/sessions/` files, live OAuth tokens, tmux/screen sessions hosting Claude, MCP servers on `0.0.0.0` |
+
 ### Developer & Infrastructure
 | Tool | What's Scanned |
 |---|---|
 | **Docker** | `~/.docker/config.json` — base64 auth blobs, identity tokens, credential helpers |
 | **Git Credentials** | `~/.git-credentials`, `~/.gitconfig` embedded tokens |
-| **PowerShell Logs** | PSReadLine `ConsoleHost_history.txt`, transcripts — detects tokens typed or pasted at the command line |
 | **Browser Sessions** | Firefox localStorage for AI domains (claude.ai, chatgpt.com, gemini, perplexity, etc.); Chromium stub |
 | **Environment Variables** | 35+ AI-related env vars (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, etc.) |
 
@@ -274,31 +290,6 @@ cd pyinstaller
 python build.py --clean
 ```
 
-## CLI Reference
-
-All flags are the same across all three versions:
-
-| Flag | Description |
-|------|-------------|
-| `--version` | Show version and exit |
-| `--show-secrets` | Display actual credential values (requires interactive "YES" confirmation) |
-| `--json` | Output JSON to stdout |
-| `--json-file PATH` | Write JSON report to file (creates parent dirs, expands `~`) |
-| `--html-file PATH` | Write HTML report to file (creates parent dirs, expands `~`) |
-| `--banner PATH` | Custom banner image for HTML report |
-| `--tools TOOL ...` | Only scan specified tools (by slug) |
-| `--list-tools` | List all available scanners |
-| `-v`, `--verbose` | Show debug output, permissions, and stack traces |
-| `--no-color` | Disable ANSI color codes |
-| `--watch` | Run continuously, alert on changes (Ctrl+C to stop) |
-| `--interval SECONDS` | Watch polling interval (default: 30) |
-| `--watch-log PATH` | Append watch events as NDJSON to file |
-| `--notify` | Fire OS-native desktop notifications for watch events |
-| `--notify-min-risk LEVEL` | Minimum risk to notify on (default: `high`) |
-| `--min-risk LEVEL` | Minimum risk to emit as watch events (default: `info`) |
-| `--debounce SECONDS` | Suppress duplicate events within window (default: 10) |
-| `--mcp` | Run as MCP stdio server (requires `pip install aihound[mcp]`) |
-
 ---
 
 ## Watch / Monitor Mode (v3.0.0)
@@ -360,8 +351,32 @@ Pipe into `jq`, `grep`, a log shipper, a SIEM, whatever.
 
 ---
 
+## CLI Reference
 
-### Available Scanners (25 total)
+All flags are the same across all three versions:
+
+| Flag | Description |
+|------|-------------|
+| `--version` | Show version and exit |
+| `--show-secrets` | Display actual credential values (requires interactive "YES" confirmation) |
+| `--json` | Output JSON to stdout |
+| `--json-file PATH` | Write JSON report to file (creates parent dirs, expands `~`) |
+| `--html-file PATH` | Write HTML report to file (creates parent dirs, expands `~`) |
+| `--banner PATH` | Custom banner image for HTML report |
+| `--tools TOOL ...` | Only scan specified tools (by slug) |
+| `--list-tools` | List all available scanners |
+| `-v`, `--verbose` | Show debug output, permissions, and stack traces |
+| `--no-color` | Disable ANSI color codes |
+| `--watch` | Run continuously, alert on changes (Ctrl+C to stop) |
+| `--interval SECONDS` | Watch polling interval (default: 30) |
+| `--watch-log PATH` | Append watch events as NDJSON to file |
+| `--notify` | Fire OS-native desktop notifications for watch events |
+| `--notify-min-risk LEVEL` | Minimum risk to notify on (default: `high`) |
+| `--min-risk LEVEL` | Minimum risk to emit as watch events (default: `info`) |
+| `--debounce SECONDS` | Suppress duplicate events within window (default: 10) |
+| `--mcp` | Run as MCP stdio server (requires `pip install aihound[mcp]`) |
+
+### Available Scanners (29 total)
 
 | Slug | Tool |
 |------|------|
@@ -371,6 +386,7 @@ Pipe into `jq`, `grep`, a log shipper, a SIEM, whatever.
 | `chatgpt` | ChatGPT Desktop |
 | `claude-code` | Claude Code CLI |
 | `claude-desktop` | Claude Desktop |
+| `claude-sessions` | Claude Sessions (active processes, live tokens, tmux/screen, MCP exposure) |
 | `cline` | Cline (VS Code) |
 | `continue-dev` | Continue.dev |
 | `cursor` | Cursor IDE |
@@ -387,7 +403,10 @@ Pipe into `jq`, `grep`, a log shipper, a SIEM, whatever.
 | `ollama` | Ollama |
 | `openai-cli` | OpenAI / Codex CLI |
 | `openclaw` | OpenClaw |
+| `persistent-env` | Persistent Environment (Linux `/etc/environment`, macOS LaunchAgents, Windows registry) |
 | `powershell` | PowerShell Logs |
+| `shell-history` | Shell History (bash, zsh, fish) |
+| `shell-rc` | Shell RC Files (`.bashrc`, `.zshrc`, fish config, `.env` files) |
 | `vscode-extensions` | VS Code Extensions |
 | `windsurf` | Windsurf |
 
@@ -402,7 +421,7 @@ Pipe into `jq`, `grep`, a log shipper, a SIEM, whatever.
 | **Runtime Dependencies** | None | None | Python 3.10+ |
 | **Cross-Compile** | Yes (any OS to any OS) | No (must build on Windows) | N/A |
 | **Supported Platforms** | Windows, macOS, Linux, WSL | Windows only | Windows, macOS, Linux, WSL |
-| **Scanners** | 25 | 25 | 25 |
+| **Scanners** | 29 | 29 | 29 |
 | **Update** | Recompile | Rebuild .exe | git pull |
 
 
@@ -481,6 +500,34 @@ The `@register` decorator auto-discovers it. No other files need editing.
 
 See `Full-Technical-Doc.md` for complete technical reference — every scanner's paths, detection logic, storage types, and remediation strings documented in detail.
 
+## Project Structure
+
+```
+aihound/
+├── core/
+│   ├── scanner.py       # BaseScanner, CredentialFinding, ScanResult, enums
+│   ├── platform.py      # OS detection (Linux/macOS/Windows/WSL), path resolution
+│   ├── redactor.py      # Secret masking with known prefix detection
+│   ├── permissions.py   # File permission analysis + human-readable descriptions
+│   └── mcp.py           # Shared MCP config parser (used by multiple scanners)
+├── scanners/            # One file per tool, auto-discovered via @register
+├── output/
+│   ├── table.py         # CLI table with ANSI colors
+│   ├── json_export.py   # JSON report
+│   └── html_report.py   # Self-contained HTML report with embedded banner
+└── utils/
+    ├── keychain.py      # macOS Keychain queries
+    ├── credman.py       # Windows Credential Manager queries
+    └── vscdb.py         # VS Code SQLite state.vscdb reader
+```
+
+## Security & Ethics
+
+This tool is for **authorized security research, penetration testing, and defensive security assessments only**. Use it on systems you own or have explicit authorization to test.
+
+- Credentials are **redacted by default** — `--show-secrets` requires explicit `YES` confirmation
+- The tool is **read-only** — it never modifies, exfiltrates, or transmits any credentials
+- JSON output **never includes raw values** even with `--show-secrets`
 
 ## MCP Server Mode (v3.0.0)
 
@@ -542,12 +589,7 @@ Verify after install by opening a new terminal and running `python --version` ag
 In your terminal, run:
 
 ```
-cd AIHound
-pip install .[mcp]
-```
-Or if you want to install it in editable/dev mode:
-```
- pip install -e .[mcp]
+pip install aihound[mcp]
 ```
 
 This installs both AIHound and the `mcp` Python SDK that lets AI assistants talk to it.
@@ -784,37 +826,6 @@ Seven action types: `chmod`, `migrate_to_env`, `change_config_value`, `run_comma
 > You: "Scan my system for AI credential exposure and fix anything CRITICAL."
 >
 > Claude: calls `aihound_scan(min_risk="critical")` → gets back 4 findings with `remediation_hint` dicts → reads each hint → runs `chmod 600 ~/.claude/.credentials.json` via its filesystem tool → calls `aihound_scan(force=True)` to verify → reports back.
-
-
-## Project Structure
-
-```
-aihound/
-├── core/
-│   ├── scanner.py       # BaseScanner, CredentialFinding, ScanResult, enums
-│   ├── platform.py      # OS detection (Linux/macOS/Windows/WSL), path resolution
-│   ├── redactor.py      # Secret masking with known prefix detection
-│   ├── permissions.py   # File permission analysis + human-readable descriptions
-│   └── mcp.py           # Shared MCP config parser (used by multiple scanners)
-├── scanners/            # One file per tool, auto-discovered via @register
-├── output/
-│   ├── table.py         # CLI table with ANSI colors
-│   ├── json_export.py   # JSON report
-│   └── html_report.py   # Self-contained HTML report with embedded banner
-└── utils/
-    ├── keychain.py      # macOS Keychain queries
-    ├── credman.py       # Windows Credential Manager queries
-    └── vscdb.py         # VS Code SQLite state.vscdb reader
-```
-
-## Security & Ethics
-
-This tool is for **authorized security research, penetration testing, and defensive security assessments only**. Use it on systems you own or have explicit authorization to test.
-
-- Credentials are **redacted by default** — `--show-secrets` requires explicit `YES` confirmation
-- The tool is **read-only** — it never modifies, exfiltrates, or transmits any credentials
-- JSON output **never includes raw values** even with `--show-secrets`
-
 
 ---
 
