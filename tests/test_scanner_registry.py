@@ -41,16 +41,16 @@ def test_every_scanner_file_is_registered():
     )
 
 
-def test_registered_scanner_count_is_at_least_25():
-    """Anchor: ensure no future change silently drops scanners below v3.0.0 count.
+def test_registered_scanner_count_is_at_least_28():
+    """Anchor: ensure no future change silently drops scanners below expected count.
 
     If a scanner is intentionally removed, bump this number AND update the docs.
     Failure here means scanners regressed (silent ImportError, removed file,
     etc.) and end users would suddenly get less coverage.
     """
     registered = get_all_scanners()
-    assert len(registered) >= 25, (
-        f"Expected >=25 registered scanners (v3.0.0 baseline), got "
+    assert len(registered) >= 28, (
+        f"Expected >=28 registered scanners (v3.0.0 + shell/env scanners), got "
         f"{len(registered)}: {sorted(s.slug() for s in registered)}"
     )
 
