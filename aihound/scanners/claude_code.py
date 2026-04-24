@@ -45,8 +45,26 @@ class ClaudeCodeScanner(BaseScanner):
             self._scan_credentials_file(path, result, show_secrets)
 
         # Scan config files for MCP server secrets
-        for path in config_paths:
-            self._scan_config_file(path, result, show_secrets)
+        # Primary files first, then backups; dedup across all
+        seen_mcp_values: set[str] = set()
+        primary_paths = [p for p in config_paths if ".backup" not in p.name]
+        backup_paths = [p for p in config_paths if ".backup" in p.name]
+        for path in primary_paths:
+            self._scan_config_file(path, result, show_secrets, seen_mcp_values)
+
+        # Count backup files that also contain MCP secrets
+        backup_count = sum(1 for p in backup_paths if p.exists())
+        for path in backup_paths:
+            self._scan_config_file(path, result, show_secrets, seen_mcp_values)
+
+        # Add backup exposure note to primary MCP findings
+        if backup_count > 0:
+            for f in result.findings:
+                if f.credential_type.startswith("mcp_env:") and ".backup" not in f.location:
+                    f.notes.append(
+                        f"Also present in {backup_count} backup file(s) "
+                        f"under ~/.claude/backups/"
+                    )
 
         return result
 
@@ -75,12 +93,24 @@ class ClaudeCodeScanner(BaseScanner):
         # ~/.claude/settings.json
         paths.append(home / ".claude" / "settings.json")
 
+        # Backup copies of .claude.json (contain same secrets)
+        backup_dir = home / ".claude" / "backups"
+        if backup_dir.is_dir():
+            for backup in backup_dir.iterdir():
+                if backup.name.startswith(".claude.json.backup"):
+                    paths.append(backup)
+
         # WSL: also check Windows paths
         if plat == Platform.WSL:
             win_home = get_wsl_windows_home()
             if win_home:
                 paths.append(win_home / ".claude.json")
                 paths.append(win_home / ".claude" / "settings.json")
+                win_backup_dir = win_home / ".claude" / "backups"
+                if win_backup_dir.is_dir():
+                    for backup in win_backup_dir.iterdir():
+                        if backup.name.startswith(".claude.json.backup"):
+                            paths.append(backup)
 
         return paths
 
@@ -187,7 +217,8 @@ class ClaudeCodeScanner(BaseScanner):
                 self._extract_auth_entries(val, path, perms, owner, result, show_secrets)
 
     def _scan_config_file(
-        self, path: Path, result: ScanResult, show_secrets: bool
+        self, path: Path, result: ScanResult, show_secrets: bool,
+        seen_mcp_values: Optional[set[str]] = None,
     ) -> None:
         if not path.exists():
             logger.debug("Config file not found: %s", path)
@@ -205,45 +236,67 @@ class ClaudeCodeScanner(BaseScanner):
             result.errors.append(f"Failed to parse {path}: {e}")
             return
 
-        # Check for MCP server configurations
-        mcp_servers = data.get("mcpServers", {})
-        if not isinstance(mcp_servers, dict):
-            return
+        # Collect all MCP server blocks: top-level and per-project
+        mcp_blocks: list[tuple[dict, Optional[str]]] = []  # (servers_dict, project_path)
 
-        for server_name, server_config in mcp_servers.items():
-            if not isinstance(server_config, dict):
-                continue
+        # Top-level mcpServers
+        top_mcp = data.get("mcpServers", {})
+        if isinstance(top_mcp, dict) and top_mcp:
+            mcp_blocks.append((top_mcp, None))
 
-            env = server_config.get("env", {})
-            if not isinstance(env, dict):
-                continue
+        # Per-project mcpServers (projects.<path>.mcpServers)
+        projects = data.get("projects", {})
+        if isinstance(projects, dict):
+            for project_path, project_cfg in projects.items():
+                if isinstance(project_cfg, dict):
+                    proj_mcp = project_cfg.get("mcpServers", {})
+                    if isinstance(proj_mcp, dict) and proj_mcp:
+                        mcp_blocks.append((proj_mcp, project_path))
 
-            for env_key, env_value in env.items():
-                if not isinstance(env_value, str):
+        for mcp_servers, project_path in mcp_blocks:
+            for server_name, server_config in mcp_servers.items():
+                if not isinstance(server_config, dict):
                     continue
 
-                # Check if this looks like it contains a secret
-                if self._looks_like_secret(env_key, env_value):
-                    notes = [f"MCP server: {server_name}"]
-                    if mtime:
-                        notes.append(f"File last modified: {describe_staleness(mtime)}")
+                env = server_config.get("env", {})
+                if not isinstance(env, dict):
+                    continue
 
-                    result.findings.append(CredentialFinding(
-                        tool_name=self.name(),
-                        credential_type=f"mcp_env:{env_key}",
-                        storage_type=StorageType.PLAINTEXT_JSON,
-                        location=str(path),
-                        exists=True,
-                        risk_level=assess_risk(StorageType.PLAINTEXT_JSON, path),
-                        value_preview=mask_value(env_value, show_full=show_secrets),
-                        raw_value=env_value if show_secrets else None,
-                        file_permissions=perms,
-                        file_owner=owner,
-                        file_modified=mtime,
-                        remediation=f"Restrict file permissions: chmod 600 {path}",
-                        remediation_hint=hint_chmod("600", str(path)),
-                        notes=notes,
-                    ))
+                for env_key, env_value in env.items():
+                    if not isinstance(env_value, str):
+                        continue
+
+                    # Deduplicate: skip if same value was already reported
+                    # (from primary file or another backup)
+                    dedup_key = f"{server_name}:{env_key}:{env_value}"
+                    if dedup_key in seen_mcp_values:
+                        continue
+                    seen_mcp_values.add(dedup_key)
+
+                    # Check if this looks like it contains a secret
+                    if self._looks_like_secret(env_key, env_value):
+                        notes = [f"MCP server: {server_name}"]
+                        if project_path:
+                            notes.append(f"Project scope: {project_path}")
+                        if mtime:
+                            notes.append(f"File last modified: {describe_staleness(mtime)}")
+
+                        result.findings.append(CredentialFinding(
+                            tool_name=self.name(),
+                            credential_type=f"mcp_env:{env_key}",
+                            storage_type=StorageType.PLAINTEXT_JSON,
+                            location=str(path),
+                            exists=True,
+                            risk_level=assess_risk(StorageType.PLAINTEXT_JSON, path),
+                            value_preview=mask_value(env_value, show_full=show_secrets),
+                            raw_value=env_value if show_secrets else None,
+                            file_permissions=perms,
+                            file_owner=owner,
+                            file_modified=mtime,
+                            remediation=f"Restrict file permissions: chmod 600 {path}",
+                            remediation_hint=hint_chmod("600", str(path)),
+                            notes=notes,
+                        ))
 
     @staticmethod
     def _looks_like_secret(key: str, value: str) -> bool:
