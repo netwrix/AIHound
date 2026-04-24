@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"aihound/core"
@@ -36,26 +37,55 @@ func (s *claudeCodeScanner) Scan(showSecrets bool) core.ScanResult {
 		}
 	}
 
-	// Config paths (MCP)
-	configPaths := []string{
+	// Config paths: primary files first, then backups
+	var primaryPaths, backupPaths []string
+	primaryPaths = append(primaryPaths,
 		filepath.Join(home, ".claude.json"),
 		filepath.Join(home, ".claude", "settings.json"),
-	}
+	)
+	backupPaths = append(backupPaths, s.collectBackups(filepath.Join(home, ".claude", "backups"))...)
+
 	if plat == core.PlatformWSL {
 		if winHome := core.GetWSLWindowsHome(); winHome != "" {
-			configPaths = append(configPaths,
+			primaryPaths = append(primaryPaths,
 				filepath.Join(winHome, ".claude.json"),
 				filepath.Join(winHome, ".claude", "settings.json"),
 			)
+			backupPaths = append(backupPaths, s.collectBackups(filepath.Join(winHome, ".claude", "backups"))...)
 		}
 	}
 
 	for _, p := range credPaths {
 		s.scanCredentialsFile(p, &result, showSecrets)
 	}
-	for _, p := range configPaths {
-		findings := core.ParseMCPFile(p, s.Name(), showSecrets)
+
+	// Scan config files with cross-file dedup
+	seen := make(map[string]bool)
+	for _, p := range primaryPaths {
+		findings := core.ParseMCPFileDedup(p, s.Name(), showSecrets, seen)
 		result.Findings = append(result.Findings, findings...)
+	}
+
+	// Count existing backup files, scan them (dedup suppresses duplicates)
+	backupCount := 0
+	for _, p := range backupPaths {
+		if _, err := os.Stat(p); err == nil {
+			backupCount++
+		}
+	}
+	for _, p := range backupPaths {
+		findings := core.ParseMCPFileDedup(p, s.Name(), showSecrets, seen)
+		result.Findings = append(result.Findings, findings...)
+	}
+
+	// Add backup exposure note to primary MCP findings
+	if backupCount > 0 {
+		for i := range result.Findings {
+			f := &result.Findings[i]
+			if strings.HasPrefix(f.CredentialType, "mcp_env:") && !strings.Contains(f.Location, ".backup") {
+				f.Notes = append(f.Notes, fmt.Sprintf("Also present in %d backup file(s) under ~/.claude/backups/", backupCount))
+			}
+		}
 	}
 
 	return result
@@ -192,4 +222,19 @@ func (s *claudeCodeScanner) extractAuthEntries(
 			s.extractAuthEntries(nested, path, perms, owner, result, showSecrets)
 		}
 	}
+}
+
+// collectBackups returns paths to .claude.json backup files in a directory.
+func (s *claudeCodeScanner) collectBackups(dir string) []string {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	var paths []string
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), ".claude.json.backup") {
+			paths = append(paths, filepath.Join(dir, e.Name()))
+		}
+	}
+	return paths
 }

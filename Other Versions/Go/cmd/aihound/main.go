@@ -23,7 +23,7 @@ import (
 )
 
 // Version is the current AIHound version.
-const Version = "3.0.0"
+const Version = "3.1.0"
 
 var (
 	flagVersion     = pflag.Bool("version", false, "Show version")

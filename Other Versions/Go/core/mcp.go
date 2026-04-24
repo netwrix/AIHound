@@ -75,16 +75,68 @@ func ParseMCPFile(path string, toolName string, showSecrets bool) []CredentialFi
 	return ParseMCPConfig(parsed, path, toolName, showSecrets)
 }
 
+// mcpBlock pairs a server map with an optional project path for context.
+type mcpBlock struct {
+	servers     map[string]interface{}
+	projectPath string // empty for top-level
+}
+
+// collectMCPBlocks gathers all mcpServers maps: top-level and per-project.
+func collectMCPBlocks(data map[string]interface{}) []mcpBlock {
+	var blocks []mcpBlock
+
+	// Top-level mcpServers
+	if raw, ok := data["mcpServers"]; ok {
+		if servers, ok := raw.(map[string]interface{}); ok && len(servers) > 0 {
+			blocks = append(blocks, mcpBlock{servers: servers})
+		}
+	}
+
+	// Per-project mcpServers (projects.<path>.mcpServers)
+	if projectsRaw, ok := data["projects"]; ok {
+		if projects, ok := projectsRaw.(map[string]interface{}); ok {
+			for projPath, projCfgRaw := range projects {
+				if projCfg, ok := projCfgRaw.(map[string]interface{}); ok {
+					if raw, ok := projCfg["mcpServers"]; ok {
+						if servers, ok := raw.(map[string]interface{}); ok && len(servers) > 0 {
+							blocks = append(blocks, mcpBlock{servers: servers, projectPath: projPath})
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return blocks
+}
+
+// ParseMCPFileDedup reads and parses an MCP config file with cross-file dedup.
+func ParseMCPFileDedup(path string, toolName string, showSecrets bool, seen map[string]bool) []CredentialFinding {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+
+	var parsed map[string]interface{}
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		return nil
+	}
+
+	return ParseMCPConfigDedup(parsed, path, toolName, showSecrets, seen)
+}
+
 // ParseMCPConfig parses mcpServers from a tool's config and finds embedded credentials.
 func ParseMCPConfig(data map[string]interface{}, sourcePath string, toolName string, showSecrets bool) []CredentialFinding {
+	return ParseMCPConfigDedup(data, sourcePath, toolName, showSecrets, nil)
+}
+
+// ParseMCPConfigDedup is like ParseMCPConfig but accepts a dedup set to suppress
+// duplicate findings across multiple files (e.g. primary + backups).
+func ParseMCPConfigDedup(data map[string]interface{}, sourcePath string, toolName string, showSecrets bool, seen map[string]bool) []CredentialFinding {
 	var findings []CredentialFinding
 
-	mcpServersRaw, ok := data["mcpServers"]
-	if !ok {
-		return findings
-	}
-	mcpServers, ok := mcpServersRaw.(map[string]interface{})
-	if !ok {
+	blocks := collectMCPBlocks(data)
+	if len(blocks) == 0 {
 		return findings
 	}
 
@@ -100,110 +152,64 @@ func ParseMCPConfig(data map[string]interface{}, sourcePath string, toolName str
 		return notes
 	}
 
-	for serverName, serverConfigRaw := range mcpServers {
-		serverConfig, ok := serverConfigRaw.(map[string]interface{})
-		if !ok {
-			continue
-		}
-
-		// Check env block for secrets
-		if envRaw, ok := serverConfig["env"]; ok {
-			if env, ok := envRaw.(map[string]interface{}); ok {
-				for key, valRaw := range env {
-					value, ok := valRaw.(string)
-					if !ok {
-						continue
-					}
-
-					// Allowlist: PATH-family / locale / shell vars are never secrets
-					if isKnownNonSecretKey(key) {
-						continue
-					}
-
-					if isEnvVarReference(value) {
-						notes := []string{
-							fmt.Sprintf("MCP server: %s", serverName),
-							"References environment variable (not inline secret)",
-						}
-						notes = appendStalenessNote(notes)
-						findings = append(findings, CredentialFinding{
-							ToolName:       toolName,
-							CredentialType: fmt.Sprintf("mcp_env_ref:%s", key),
-							StorageType:    PlaintextJSON,
-							Location:       sourcePath,
-							Exists:         true,
-							RiskLevel:      RiskInfo,
-							ValuePreview:   value,
-							FileModified:   fileMtime,
-							Remediation:    "Verify env var is set in a secure environment, not committed to source",
-							RemediationHint: remediation.HintManual("Verify env var is set in a secure environment, not committed to source"),
-							Notes:          notes,
-						})
-					} else if looksLikeSecretKey(key) || looksLikeSecretValue(value) {
-						notes := []string{
-							fmt.Sprintf("MCP server: %s", serverName),
-							"Inline secret in config",
-						}
-						notes = appendStalenessNote(notes)
-						findings = append(findings, CredentialFinding{
-							ToolName:        toolName,
-							CredentialType:  fmt.Sprintf("mcp_env:%s", key),
-							StorageType:     PlaintextJSON,
-							Location:        sourcePath,
-							Exists:          true,
-							RiskLevel:       AssessRisk(PlaintextJSON, sourcePath),
-							ValuePreview:    MaskValue(value, showSecrets),
-							RawValue:        rawValueIf(value, showSecrets),
-							FilePermissions: perms,
-							FileOwner:       owner,
-							FileModified:    fileMtime,
-							Remediation:     "Move secret to environment variable or secret manager",
-							RemediationHint: remediation.HintMigrateToEnv([]string{}, sourcePath),
-							Notes:           notes,
-						})
-					}
-				}
+	for _, block := range blocks {
+		for serverName, serverConfigRaw := range block.servers {
+			serverConfig, ok := serverConfigRaw.(map[string]interface{})
+			if !ok {
+				continue
 			}
-		}
 
-		// Check headers block (for HTTP transport MCP servers)
-		if headersRaw, ok := serverConfig["headers"]; ok {
-			if headers, ok := headersRaw.(map[string]interface{}); ok {
-				for key, valRaw := range headers {
-					value, ok := valRaw.(string)
-					if !ok {
-						continue
-					}
-					keyLower := strings.ToLower(key)
-					if keyLower == "authorization" || keyLower == "x-api-key" || keyLower == "api-key" {
+			// Helper to build notes with project scope context
+			buildNotes := func(extra ...string) []string {
+				notes := []string{fmt.Sprintf("MCP server: %s", serverName)}
+				if block.projectPath != "" {
+					notes = append(notes, fmt.Sprintf("Project scope: %s", block.projectPath))
+				}
+				notes = append(notes, extra...)
+				return appendStalenessNote(notes)
+			}
+
+			// Check env block for secrets
+			if envRaw, ok := serverConfig["env"]; ok {
+				if env, ok := envRaw.(map[string]interface{}); ok {
+					for key, valRaw := range env {
+						value, ok := valRaw.(string)
+						if !ok {
+							continue
+						}
+
+						// Allowlist: PATH-family / locale / shell vars are never secrets
+						if isKnownNonSecretKey(key) {
+							continue
+						}
+
+						// Deduplicate across files (primary + backups)
+						if seen != nil {
+							dedupKey := serverName + ":" + key + ":" + value
+							if seen[dedupKey] {
+								continue
+							}
+							seen[dedupKey] = true
+						}
+
 						if isEnvVarReference(value) {
-							notes := []string{
-								fmt.Sprintf("MCP server: %s", serverName),
-								"References environment variable",
-							}
-							notes = appendStalenessNote(notes)
-							findings = append(findings, CredentialFinding{
-								ToolName:       toolName,
-								CredentialType: fmt.Sprintf("mcp_header:%s", key),
-								StorageType:    PlaintextJSON,
-								Location:       sourcePath,
-								Exists:         true,
-								RiskLevel:      RiskInfo,
-								ValuePreview:   value,
-								FileModified:   fileMtime,
-								Remediation:    "Verify env var is set in a secure environment, not committed to source",
-								RemediationHint: remediation.HintManual("Verify env var is set in a secure environment, not committed to source"),
-								Notes:          notes,
-							})
-						} else {
-							notes := []string{
-								fmt.Sprintf("MCP server: %s", serverName),
-								"Inline auth header",
-							}
-							notes = appendStalenessNote(notes)
 							findings = append(findings, CredentialFinding{
 								ToolName:        toolName,
-								CredentialType:  fmt.Sprintf("mcp_header:%s", key),
+								CredentialType:  fmt.Sprintf("mcp_env_ref:%s", key),
+								StorageType:     PlaintextJSON,
+								Location:        sourcePath,
+								Exists:          true,
+								RiskLevel:       RiskInfo,
+								ValuePreview:    value,
+								FileModified:    fileMtime,
+								Remediation:     "Verify env var is set in a secure environment, not committed to source",
+								RemediationHint: remediation.HintManual("Verify env var is set in a secure environment, not committed to source"),
+								Notes:           buildNotes("References environment variable (not inline secret)"),
+							})
+						} else if looksLikeSecretKey(key) || looksLikeSecretValue(value) {
+							findings = append(findings, CredentialFinding{
+								ToolName:        toolName,
+								CredentialType:  fmt.Sprintf("mcp_env:%s", key),
 								StorageType:     PlaintextJSON,
 								Location:        sourcePath,
 								Exists:          true,
@@ -215,44 +221,86 @@ func ParseMCPConfig(data map[string]interface{}, sourcePath string, toolName str
 								FileModified:    fileMtime,
 								Remediation:     "Move secret to environment variable or secret manager",
 								RemediationHint: remediation.HintMigrateToEnv([]string{}, sourcePath),
-								Notes:           notes,
+								Notes:           buildNotes("Inline secret in config"),
 							})
 						}
 					}
 				}
 			}
-		}
 
-		// Check args for tokens (some MCP servers pass tokens as CLI args)
-		if argsRaw, ok := serverConfig["args"]; ok {
-			if args, ok := argsRaw.([]interface{}); ok {
-				for i, argRaw := range args {
-					arg, ok := argRaw.(string)
-					if !ok {
-						continue
-					}
-					if looksLikeSecretValue(arg) && !strings.HasPrefix(arg, "-") {
-						notes := []string{
-							fmt.Sprintf("MCP server: %s", serverName),
-							fmt.Sprintf("Token in CLI arg position %d", i),
+			// Check headers block (for HTTP transport MCP servers)
+			if headersRaw, ok := serverConfig["headers"]; ok {
+				if headers, ok := headersRaw.(map[string]interface{}); ok {
+					for key, valRaw := range headers {
+						value, ok := valRaw.(string)
+						if !ok {
+							continue
 						}
-						notes = appendStalenessNote(notes)
-						findings = append(findings, CredentialFinding{
-							ToolName:        toolName,
-							CredentialType:  fmt.Sprintf("mcp_arg[%d]", i),
-							StorageType:     PlaintextJSON,
-							Location:        sourcePath,
-							Exists:          true,
-							RiskLevel:       AssessRisk(PlaintextJSON, sourcePath),
-							ValuePreview:    MaskValue(arg, showSecrets),
-							RawValue:        rawValueIf(arg, showSecrets),
-							FilePermissions: perms,
-							FileOwner:       owner,
-							FileModified:    fileMtime,
-							Remediation:     "Move secret to environment variable or secret manager",
-							RemediationHint: remediation.HintMigrateToEnv([]string{}, sourcePath),
-							Notes:           notes,
-						})
+						keyLower := strings.ToLower(key)
+						if keyLower == "authorization" || keyLower == "x-api-key" || keyLower == "api-key" {
+							if isEnvVarReference(value) {
+								findings = append(findings, CredentialFinding{
+									ToolName:        toolName,
+									CredentialType:  fmt.Sprintf("mcp_header:%s", key),
+									StorageType:     PlaintextJSON,
+									Location:        sourcePath,
+									Exists:          true,
+									RiskLevel:       RiskInfo,
+									ValuePreview:    value,
+									FileModified:    fileMtime,
+									Remediation:     "Verify env var is set in a secure environment, not committed to source",
+									RemediationHint: remediation.HintManual("Verify env var is set in a secure environment, not committed to source"),
+									Notes:           buildNotes("References environment variable"),
+								})
+							} else {
+								findings = append(findings, CredentialFinding{
+									ToolName:        toolName,
+									CredentialType:  fmt.Sprintf("mcp_header:%s", key),
+									StorageType:     PlaintextJSON,
+									Location:        sourcePath,
+									Exists:          true,
+									RiskLevel:       AssessRisk(PlaintextJSON, sourcePath),
+									ValuePreview:    MaskValue(value, showSecrets),
+									RawValue:        rawValueIf(value, showSecrets),
+									FilePermissions: perms,
+									FileOwner:       owner,
+									FileModified:    fileMtime,
+									Remediation:     "Move secret to environment variable or secret manager",
+									RemediationHint: remediation.HintMigrateToEnv([]string{}, sourcePath),
+									Notes:           buildNotes("Inline auth header"),
+								})
+							}
+						}
+					}
+				}
+			}
+
+			// Check args for tokens (some MCP servers pass tokens as CLI args)
+			if argsRaw, ok := serverConfig["args"]; ok {
+				if args, ok := argsRaw.([]interface{}); ok {
+					for i, argRaw := range args {
+						arg, ok := argRaw.(string)
+						if !ok {
+							continue
+						}
+						if looksLikeSecretValue(arg) && !strings.HasPrefix(arg, "-") {
+							findings = append(findings, CredentialFinding{
+								ToolName:        toolName,
+								CredentialType:  fmt.Sprintf("mcp_arg[%d]", i),
+								StorageType:     PlaintextJSON,
+								Location:        sourcePath,
+								Exists:          true,
+								RiskLevel:       AssessRisk(PlaintextJSON, sourcePath),
+								ValuePreview:    MaskValue(arg, showSecrets),
+								RawValue:        rawValueIf(arg, showSecrets),
+								FilePermissions: perms,
+								FileOwner:       owner,
+								FileModified:    fileMtime,
+								Remediation:     "Move secret to environment variable or secret manager",
+								RemediationHint: remediation.HintMigrateToEnv([]string{}, sourcePath),
+								Notes:           buildNotes(fmt.Sprintf("Token in CLI arg position %d", i)),
+							})
+						}
 					}
 				}
 			}
