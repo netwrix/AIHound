@@ -12,13 +12,15 @@ from aihound.core.scanner import (
     BaseScanner, CredentialFinding, ScanResult, StorageType, RiskLevel,
 )
 from aihound.core.platform import detect_platform, Platform, get_home, get_wsl_windows_home, get_appdata
-from aihound.core.redactor import mask_value, identify_credential_type, KNOWN_PREFIXES
+from aihound.core.redactor import mask_value, identify_credential_type, KNOWN_PREFIXES, redact_line
 from aihound.core.permissions import (
     get_file_permissions, get_file_owner, assess_risk,
     get_file_mtime, describe_staleness,
 )
 from aihound.remediation import hint_run_command
 from aihound.scanners import register
+
+_MAX_HISTORY_SIZE = 50 * 1024 * 1024  # 50 MB
 
 
 # Build a regex that matches any known credential prefix followed by the typical
@@ -141,6 +143,22 @@ class PowerShellScanner(BaseScanner):
         storage = StorageType.PLAINTEXT_FILE
 
         try:
+            file_size = path.stat().st_size
+            if file_size > _MAX_HISTORY_SIZE:
+                logger.warning(
+                    "Skipping %s: file size %d bytes exceeds %d byte limit",
+                    path, file_size, _MAX_HISTORY_SIZE,
+                )
+                result.errors.append(
+                    f"Skipped {path}: file too large ({file_size} bytes, limit {_MAX_HISTORY_SIZE})"
+                )
+                return
+        except OSError as e:
+            logger.warning("Failed to stat %s: %s", path, e)
+            result.errors.append(f"Failed to stat {path}: {e}")
+            return
+
+        try:
             # Use errors='replace' because PSReadLine history files can contain
             # non-UTF-8 bytes (pasted characters, terminal escape sequences)
             text = path.read_text(encoding="utf-8", errors="replace")
@@ -202,7 +220,7 @@ class PowerShellScanner(BaseScanner):
     ) -> None:
         cred_type = identify_credential_type(value) or "command-line-secret"
 
-        notes = [f"Line {line_num}: {self._truncate_line(line_text)}"]
+        notes = [f"Line {line_num}: {self._truncate_line(redact_line(line_text))}"]
         if mtime:
             notes.append(f"File last modified: {describe_staleness(mtime)}")
         if confidence == "context":

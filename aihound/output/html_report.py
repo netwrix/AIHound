@@ -320,7 +320,10 @@ def export_html(
 </body>
 </html>"""
 
-    Path(filepath).write_text(html, encoding="utf-8")
+    import os
+    fd = os.open(str(filepath), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with open(fd, "w", encoding="utf-8") as f:
+        f.write(html)
 
 
 def _esc(text: str) -> str:

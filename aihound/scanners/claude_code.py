@@ -20,7 +20,7 @@ from aihound.core.scanner import (
 from aihound.core.platform import detect_platform, Platform, get_home, get_wsl_windows_home
 from aihound.core.redactor import mask_value
 from aihound.core.permissions import get_file_permissions, get_file_owner, assess_risk, get_file_mtime, describe_staleness
-from aihound.remediation import hint_chmod
+from aihound.remediation import hint_chmod, hint_manual
 from aihound.scanners import register
 
 
@@ -191,6 +191,13 @@ class ClaudeCodeScanner(BaseScanner):
                     except (ValueError, OSError):
                         pass
 
+                if perms == "0600":
+                    _remediation = "Credentials stored as plaintext; consider migrating to an OS credential store"
+                    _remediation_hint = hint_manual("Consider migrating to an OS credential store")
+                else:
+                    _remediation = f"Restrict file permissions: chmod 600 {path}"
+                    _remediation_hint = hint_chmod("600", str(path))
+
                 result.findings.append(CredentialFinding(
                     tool_name=self.name(),
                     credential_type=cred_type,
@@ -204,8 +211,8 @@ class ClaudeCodeScanner(BaseScanner):
                     file_owner=owner,
                     file_modified=mtime,
                     expiry=expiry,
-                    remediation=f"Restrict file permissions: chmod 600 {path}",
-                    remediation_hint=hint_chmod("600", str(path)),
+                    remediation=_remediation,
+                    remediation_hint=_remediation_hint,
                     notes=notes,
                 ))
 
@@ -281,6 +288,13 @@ class ClaudeCodeScanner(BaseScanner):
                         if mtime:
                             notes.append(f"File last modified: {describe_staleness(mtime)}")
 
+                        if perms == "0600":
+                            _remediation = "Credentials stored as plaintext; consider migrating to an OS credential store"
+                            _remediation_hint = hint_manual("Consider migrating to an OS credential store")
+                        else:
+                            _remediation = f"Restrict file permissions: chmod 600 {path}"
+                            _remediation_hint = hint_chmod("600", str(path))
+
                         result.findings.append(CredentialFinding(
                             tool_name=self.name(),
                             credential_type=f"mcp_env:{env_key}",
@@ -293,8 +307,8 @@ class ClaudeCodeScanner(BaseScanner):
                             file_permissions=perms,
                             file_owner=owner,
                             file_modified=mtime,
-                            remediation=f"Restrict file permissions: chmod 600 {path}",
-                            remediation_hint=hint_chmod("600", str(path)),
+                            remediation=_remediation,
+                            remediation_hint=_remediation_hint,
                             notes=notes,
                         ))
 

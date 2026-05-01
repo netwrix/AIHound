@@ -13,7 +13,7 @@ from aihound.core.platform import (
 )
 from aihound.core.redactor import mask_value
 from aihound.core.permissions import get_file_permissions, get_file_owner, assess_risk, get_file_mtime, describe_staleness
-from aihound.remediation import hint_chmod
+from aihound.remediation import hint_chmod, hint_manual
 from aihound.scanners import register
 
 
@@ -89,6 +89,12 @@ class ChatGPTScanner(BaseScanner):
                 notes = []
                 if mtime:
                     notes.append(f"File last modified: {describe_staleness(mtime)}")
+                if perms == "0600":
+                    _remediation = "Credentials stored as plaintext; consider migrating to an OS credential store"
+                    _remediation_hint = hint_manual("Consider migrating to an OS credential store")
+                else:
+                    _remediation = "Restrict file permissions on ChatGPT config directory"
+                    _remediation_hint = hint_chmod("700", str(path.parent))
                 result.findings.append(CredentialFinding(
                     tool_name=self.name(),
                     credential_type=key,
@@ -101,8 +107,8 @@ class ChatGPTScanner(BaseScanner):
                     file_permissions=perms,
                     file_owner=owner,
                     file_modified=mtime,
-                    remediation="Restrict file permissions on ChatGPT config directory",
-                    remediation_hint=hint_chmod("700", str(path.parent)),
+                    remediation=_remediation,
+                    remediation_hint=_remediation_hint,
                     notes=notes,
                 ))
 

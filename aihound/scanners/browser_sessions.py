@@ -287,6 +287,16 @@ class BrowserSessionsScanner(BaseScanner):
 
             preview = mask_value(value_str, show_full=show_secrets) if value_str else "(empty)"
 
+            if perms == "0600":
+                _remediation = "Credentials stored as plaintext; consider migrating to an OS credential store"
+                _remediation_hint = hint_manual("Consider migrating to an OS credential store")
+            else:
+                _remediation = (
+                    "Ensure browser profile directory has restricted permissions "
+                    "(chmod 700). Clear site data to revoke local sessions."
+                )
+                _remediation_hint = hint_chmod("700", str(profile_dir))
+
             result.findings.append(CredentialFinding(
                 tool_name=f"Firefox: {domain}",
                 credential_type="browser_localstorage",
@@ -299,11 +309,8 @@ class BrowserSessionsScanner(BaseScanner):
                 file_permissions=perms,
                 file_owner=owner,
                 file_modified=mtime,
-                remediation=(
-                    "Ensure browser profile directory has restricted permissions "
-                    "(chmod 700). Clear site data to revoke local sessions."
-                ),
-                remediation_hint=hint_chmod("700", str(profile_dir)),
+                remediation=_remediation,
+                remediation_hint=_remediation_hint,
                 notes=notes,
             ))
 
@@ -369,6 +376,16 @@ class BrowserSessionsScanner(BaseScanner):
 
             preview = mask_value(value_str, show_full=show_secrets) if value_str else "(empty)"
 
+            if perms == "0600":
+                _remediation = "Credentials stored as plaintext; consider migrating to an OS credential store"
+                _remediation_hint = hint_manual("Consider migrating to an OS credential store")
+            else:
+                _remediation = (
+                    "Ensure browser profile directory has restricted permissions "
+                    "(chmod 700). Clear site cookies to revoke this session."
+                )
+                _remediation_hint = hint_chmod("700", str(profile_dir))
+
             result.findings.append(CredentialFinding(
                 tool_name=f"Firefox cookie: {host_str.lstrip('.')}",
                 credential_type="browser_cookie",
@@ -381,11 +398,8 @@ class BrowserSessionsScanner(BaseScanner):
                 file_permissions=perms,
                 file_owner=owner,
                 file_modified=mtime,
-                remediation=(
-                    "Ensure browser profile directory has restricted permissions "
-                    "(chmod 700). Clear site cookies to revoke this session."
-                ),
-                remediation_hint=hint_chmod("700", str(profile_dir)),
+                remediation=_remediation,
+                remediation_hint=_remediation_hint,
                 notes=notes,
             ))
 

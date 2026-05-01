@@ -15,6 +15,7 @@ from __future__ import annotations
 import logging
 import shutil
 import subprocess
+import xml.sax.saxutils
 from typing import Optional
 
 from aihound.core.platform import detect_platform, Platform
@@ -103,14 +104,21 @@ def _notify_linux(title: str, body: str, urgency: str, icon: Optional[str]) -> b
     return True
 
 
+def _applescript_safe(s: str) -> str:
+    """Encode a Python string as a safe AppleScript expression."""
+    parts = s.split('"')
+    escaped_parts = [f'"{p}"' for p in parts]
+    return " & quote & ".join(escaped_parts)
+
+
 def _notify_macos(title: str, body: str, urgency: str) -> bool:
-    # osascript: display notification "<body>" with title "AIHound" subtitle "<title>"
-    # Escape double quotes in user content
-    safe_title = title.replace('"', '\\"')
-    safe_body = body.replace('"', '\\"')
+    # osascript: display notification <body> with title "AIHound" subtitle <title>
+    # Use AppleScript quote constant concatenation for safe escaping
+    safe_title = _applescript_safe(title)
+    safe_body = _applescript_safe(body)
     script = (
-        f'display notification "{safe_body}" with title "AIHound" '
-        f'subtitle "{safe_title}"'
+        f'display notification {safe_body} with title "AIHound" '
+        f'subtitle {safe_title}'
     )
     # Critical urgency: play a sound
     if urgency == URGENCY_CRITICAL:
@@ -130,24 +138,30 @@ def _notify_windows(title: str, body: str, urgency: str) -> bool:
     Uses Windows.UI.Notifications APIs that ship with Windows 10+. No external
     PowerShell modules required.
     """
-    # Escape single quotes (PowerShell literal strings use doubled single quotes)
-    safe_title = title.replace("'", "''")
-    safe_body = body.replace("'", "''")
+    # XML-escape to prevent injection into the toast template
+    safe_title = xml.sax.saxutils.escape(title)
+    safe_body = xml.sax.saxutils.escape(body)
 
-    # XML toast template — kept simple, uses the default AIHound app display name
+    # Escape single quotes for PowerShell -replace RHS by doubling them
+    ps_title = safe_title.replace("'", "''")
+    ps_body = safe_body.replace("'", "''")
+
+    # XML toast template — single-quoted here-string prevents PowerShell interpolation
     ps_script = f"""
 $ErrorActionPreference = 'Stop'
 [void][Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType=WindowsRuntime]
-$template = @"
+$template = @'
 <toast>
   <visual>
     <binding template="ToastGeneric">
-      <text>{safe_title}</text>
-      <text>{safe_body}</text>
+      <text>TITLE_PLACEHOLDER</text>
+      <text>BODY_PLACEHOLDER</text>
     </binding>
   </visual>
 </toast>
-"@
+'@
+$template = $template -replace 'TITLE_PLACEHOLDER', '{ps_title}'
+$template = $template -replace 'BODY_PLACEHOLDER', '{ps_body}'
 $xml = [Windows.Data.Xml.Dom.XmlDocument]::new()
 $xml.LoadXml($template)
 $toast = [Windows.UI.Notifications.ToastNotification]::new($xml)

@@ -158,6 +158,11 @@ class DebounceTracker:
             return True
         if now is None:
             now = time.monotonic()
+        # Evict stale entries to prevent unbounded growth
+        self._last_emit = {
+            k: v for k, v in self._last_emit.items()
+            if (now - v) < self.window * 2
+        }
         key = (finding_key(event.finding), event.event_type)
         last = self._last_emit.get(key)
         if last is None or (now - last) >= self.window:

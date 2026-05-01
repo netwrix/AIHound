@@ -56,6 +56,19 @@ def is_group_readable(path: Path) -> bool:
         return False
 
 
+def is_owner_only(path: Path) -> bool:
+    """Check if a file has restrictive permissions (only owner can read/write).
+
+    Returns True if permissions are 0o600 or 0o400 (owner read/write or owner read only).
+    """
+    try:
+        st = os.stat(path)
+        mode = stat.S_IMODE(st.st_mode)
+        return mode in (0o600, 0o400)
+    except OSError:
+        return False
+
+
 def describe_permissions(perms: Optional[str]) -> str:
     """Translate octal permission string to human-readable description.
 
@@ -135,6 +148,8 @@ def assess_risk(storage_type: StorageType, path: Optional[Path] = None) -> RiskL
                 return RiskLevel.CRITICAL
             if is_group_readable(path):
                 return RiskLevel.HIGH
+            if is_owner_only(path):
+                return RiskLevel.MEDIUM
             return RiskLevel.HIGH
         return RiskLevel.HIGH
 

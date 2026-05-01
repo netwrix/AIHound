@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import platform as _platform
+import subprocess
 from enum import Enum
 from pathlib import Path
 from typing import Optional
+
+logger = logging.getLogger("aihound.core.platform")
 
 
 class Platform(Enum):
@@ -85,14 +89,36 @@ def get_localappdata() -> Optional[Path]:
     return None
 
 
+def _query_windows_username() -> Optional[str]:
+    """Query the actual Windows username via cmd.exe."""
+    try:
+        result = subprocess.run(
+            ["cmd.exe", "/c", "echo", "%USERNAME%"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode == 0:
+            username = result.stdout.strip()
+            if username and username != "%USERNAME%":
+                return username
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError) as e:
+        logger.debug("Failed to query Windows username: %s", e)
+    return None
+
+
 def _find_wsl_appdata() -> Optional[Path]:
     """Find Windows AppData/Roaming from WSL via /mnt/c/Users/."""
     mnt_c = Path("/mnt/c/Users")
     if not mnt_c.exists():
         return None
 
-    # Try to detect the Windows username from the WSL mount
-    # Check common indicators
+    # Try to detect the Windows username by querying cmd.exe first
+    win_user = _query_windows_username()
+    if win_user:
+        appdata = mnt_c / win_user / "AppData" / "Roaming"
+        if appdata.exists():
+            return appdata
+
+    # Fall back to directory iteration
     for candidate in mnt_c.iterdir():
         if candidate.name in ("Public", "Default", "Default User", "All Users"):
             continue
@@ -112,6 +138,14 @@ def get_wsl_windows_home() -> Optional[Path]:
     if not mnt_c.exists():
         return None
 
+    # Try to detect the Windows username by querying cmd.exe first
+    win_user = _query_windows_username()
+    if win_user:
+        candidate = mnt_c / win_user
+        if (candidate / "AppData").exists():
+            return candidate
+
+    # Fall back to directory iteration
     for candidate in mnt_c.iterdir():
         if candidate.name in ("Public", "Default", "Default User", "All Users"):
             continue

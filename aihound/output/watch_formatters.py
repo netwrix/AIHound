@@ -143,7 +143,9 @@ class NDJSONEventSink:
             path = Path(filepath).expanduser()
             if path.parent and not path.parent.exists():
                 path.parent.mkdir(parents=True, exist_ok=True)
-            self.file = open(path, "a", encoding="utf-8", buffering=1)
+            import os
+            fd = os.open(str(path), os.O_CREAT | os.O_WRONLY | os.O_APPEND, 0o600)
+            self.file = open(fd, "a", encoding="utf-8", buffering=1)
             self._owned = True
         else:
             self.file = file

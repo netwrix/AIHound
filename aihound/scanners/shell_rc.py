@@ -12,7 +12,7 @@ from aihound.core.scanner import (
     BaseScanner, CredentialFinding, ScanResult, StorageType, RiskLevel,
 )
 from aihound.core.platform import detect_platform, Platform, get_home, get_wsl_windows_home
-from aihound.core.redactor import mask_value, identify_credential_type, KNOWN_PREFIXES
+from aihound.core.redactor import mask_value, identify_credential_type, KNOWN_PREFIXES, redact_line
 from aihound.core.permissions import (
     get_file_permissions, get_file_owner, assess_risk,
     get_file_mtime, describe_staleness,
@@ -286,7 +286,7 @@ class ShellRcScanner(BaseScanner):
         owner = get_file_owner(path) if path.exists() else None
         mtime = get_file_mtime(path) if path.exists() else None
 
-        notes: list[str] = [f"Line {line_num}: {line_text[:120]}"]
+        notes: list[str] = [f"Line {line_num}: {redact_line(line_text)[:120]}"]
         if mtime:
             notes.append(f"File last modified: {describe_staleness(mtime)}")
 

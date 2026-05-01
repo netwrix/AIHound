@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 # Known credential prefixes and their display names
 KNOWN_PREFIXES = {
     "sk-ant-": "Anthropic",
@@ -54,6 +56,52 @@ def mask_value(value: str, show_full: bool = False) -> str:
 
     # No known prefix: show first 6 + ... + last 4
     return f"{value[:6]}...{value[-4:]}"
+
+
+# Pre-compiled patterns for redact_line
+_PREFIX_PATTERN = "|".join(re.escape(p) for p in sorted(KNOWN_PREFIXES.keys(), key=len, reverse=True))
+_REDACT_TOKEN_RE = re.compile(
+    r"(?<![A-Za-z0-9_\-])((?:" + _PREFIX_PATTERN + r")[A-Za-z0-9_\-./+=]{16,})"
+)
+_REDACT_CONTEXT_RE = re.compile(
+    r"""(?ix)
+    (
+      (?:api[_-]?key|token|secret|password|passwd|auth[a-z_-]*|bearer)\s*[=:]\s*
+    | export\s+[A-Z_][A-Z0-9_]*\s*=\s*
+    | -H\s+["']?Authorization:\s*Bearer\s+
+    | -H\s+["']?x-api-key:\s*
+    | --api-key\s+
+    | --token\s+
+    )
+    ["']?([A-Za-z0-9_\-./+=]{20,})["']?
+""",
+)
+
+
+def redact_line(line: str) -> str:
+    """Redact any credential values found in a line of text.
+
+    Uses KNOWN_PREFIXES to find and mask known token prefixes, and also
+    redacts values after common assignment/header patterns like ``=``,
+    ``export VAR=value``, ``-H Authorization: Bearer``, etc.
+
+    Returns the line with credential values replaced by masked forms.
+    """
+    # Pass 1: Replace known-prefix tokens
+    def _mask_prefix_match(m: re.Match) -> str:
+        return mask_value(m.group(1))
+
+    result = _REDACT_TOKEN_RE.sub(_mask_prefix_match, line)
+
+    # Pass 2: Replace context-based credential values
+    def _mask_context_match(m: re.Match) -> str:
+        prefix_part = m.group(1)
+        value_part = m.group(2)
+        return prefix_part + mask_value(value_part)
+
+    result = _REDACT_CONTEXT_RE.sub(_mask_context_match, result)
+
+    return result
 
 
 def identify_credential_type(value: str) -> str | None:

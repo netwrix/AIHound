@@ -190,19 +190,25 @@ def main(argv: list[str] | None = None) -> int:
     # --show-secrets safety gate
     show_secrets = False
     if args.show_secrets:
-        if sys.stdin.isatty():
-            logger.warning(
-                "--show-secrets will display raw credential values. "
-                "Only use on YOUR OWN machine for research purposes."
+        if not sys.stdin.isatty():
+            print(
+                "ERROR: --show-secrets requires an interactive terminal. "
+                "Refusing to expose credentials in non-interactive mode.",
+                file=sys.stderr,
             )
-            try:
-                confirm = input("Type 'YES' to confirm: ")
-                if confirm.strip() != "YES":
-                    print("Aborted.")
-                    return 1
-            except (EOFError, KeyboardInterrupt):
-                print("\nAborted.")
+            return 1
+        logger.warning(
+            "--show-secrets will display raw credential values. "
+            "Only use on YOUR OWN machine for research purposes."
+        )
+        try:
+            confirm = input("Type 'YES' to confirm: ")
+            if confirm.strip() != "YES":
+                print("Aborted.")
                 return 1
+        except (EOFError, KeyboardInterrupt):
+            print("\nAborted.")
+            return 1
         show_secrets = True
 
     # Filter scanners
