@@ -116,7 +116,18 @@ func (s *powershellScanner) getTranscriptPaths(plat core.Platform) []string {
 	return paths
 }
 
+const maxPSLogSize = 50 * 1024 * 1024 // 50 MB
+
 func (s *powershellScanner) scanLogFile(path string, result *core.ScanResult, showSecrets bool) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return
+	}
+	if info.Size() > maxPSLogSize {
+		result.Errors = append(result.Errors, fmt.Sprintf("Skipped oversized history file (%d bytes): %s", info.Size(), path))
+		return
+	}
+
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return
@@ -171,7 +182,7 @@ func (s *powershellScanner) addFinding(
 		credType = "command-line-secret"
 	}
 
-	notes := []string{fmt.Sprintf("Line %d: %s", lineNum, psTruncateLine(lineText, 120))}
+	notes := []string{fmt.Sprintf("Line %d: %s", lineNum, psTruncateLine(core.RedactLine(lineText), 120))}
 	if !mtimeTime.IsZero() {
 		notes = append(notes, "File last modified: "+core.DescribeStaleness(mtimeTime))
 	}

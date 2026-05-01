@@ -1,6 +1,11 @@
 package core
 
-import "sort"
+import (
+	"regexp"
+	"sort"
+	"strings"
+	"sync"
+)
 
 // knownPrefix maps a credential prefix to its human-readable type name.
 type knownPrefix struct {
@@ -93,4 +98,52 @@ func GetKnownPrefixes() []string {
 		out = append(out, kp.Prefix)
 	}
 	return out
+}
+
+// redactLineRe matches known-prefix tokens in a line of text.
+// Built once on first call to RedactLine.
+var (
+	redactLineRe   *regexp.Regexp
+	redactValueRe  *regexp.Regexp
+	redactLineOnce sync.Once
+)
+
+func initRedactRegex() {
+	redactLineOnce.Do(func() {
+		prefixes := GetKnownPrefixes()
+		escaped := make([]string, len(prefixes))
+		for i, p := range prefixes {
+			escaped[i] = regexp.QuoteMeta(p)
+		}
+		prefixAlt := strings.Join(escaped, "|")
+		// Match known-prefix tokens (prefix + 16+ alphanum chars)
+		redactLineRe = regexp.MustCompile(`((?:` + prefixAlt + `)[A-Za-z0-9_\-./+=]{16,})`)
+		// Match values after = signs and similar assignment patterns
+		redactValueRe = regexp.MustCompile(`(?i)((?:api[_-]?key|token|secret|password|passwd|auth[a-z_-]*|bearer)\s*[=:]\s*["']?)([A-Za-z0-9_\-./+=]{20,})`)
+	})
+}
+
+// RedactLine masks known credential patterns in a line of text intended for
+// notes or log output. Known-prefix tokens are replaced with prefix + "***".
+// Values after common assignment patterns (e.g. "token=...") are replaced
+// with "***REDACTED***".
+func RedactLine(line string) string {
+	initRedactRegex()
+
+	// Pass 1: Redact known-prefix tokens
+	line = redactLineRe.ReplaceAllStringFunc(line, func(match string) string {
+		prefix, _ := findMatchingPrefix(match)
+		if prefix != "" {
+			return prefix + "***"
+		}
+		if len(match) > 6 {
+			return match[:6] + "***"
+		}
+		return "***REDACTED***"
+	})
+
+	// Pass 2: Redact values after assignment patterns
+	line = redactValueRe.ReplaceAllString(line, "${1}***REDACTED***")
+
+	return line
 }

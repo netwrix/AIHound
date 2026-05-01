@@ -328,11 +328,18 @@ func (t *DebounceTracker) Allow(event WatchEvent) bool {
 	if t.lastEmit == nil {
 		t.lastEmit = make(map[debounceKey]time.Time)
 	}
+	now := time.Now()
+	// Evict stale entries to prevent unbounded growth
+	for k, last := range t.lastEmit {
+		if now.Sub(last) > t.Window*2 {
+			delete(t.lastEmit, k)
+		}
+	}
+
 	key := debounceKey{
 		Finding:   FindingKeyOf(event.Finding),
 		EventType: event.EventType,
 	}
-	now := time.Now()
 	last, ok := t.lastEmit[key]
 	if !ok || now.Sub(last) >= t.Window {
 		t.lastEmit[key] = now

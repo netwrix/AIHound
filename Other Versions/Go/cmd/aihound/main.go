@@ -23,7 +23,7 @@ import (
 )
 
 // Version is the current AIHound version.
-const Version = "3.1.0"
+const Version = "3.1.1"
 
 var (
 	flagVersion     = pflag.Bool("version", false, "Show version")
@@ -101,20 +101,22 @@ func main() {
 	// --show-secrets safety gate
 	showSecrets := false
 	if *flagShowSecrets {
-		if term.IsTerminal(int(os.Stdin.Fd())) {
-			fmt.Fprintln(os.Stderr, "WARNING: --show-secrets will display raw credential values.")
-			fmt.Fprintln(os.Stderr, "Only use on YOUR OWN machine for research purposes.")
-			fmt.Fprint(os.Stderr, "Type YES to confirm: ")
-			reader := bufio.NewReader(os.Stdin)
-			confirm, err := reader.ReadString('\n')
-			if err != nil {
-				fmt.Fprintln(os.Stderr, "\nAborted.")
-				os.Exit(1)
-			}
-			if strings.TrimSpace(confirm) != "YES" {
-				fmt.Fprintln(os.Stderr, "Aborted.")
-				os.Exit(1)
-			}
+		if !term.IsTerminal(int(os.Stdin.Fd())) {
+			fmt.Fprintln(os.Stderr, "ERROR: --show-secrets requires an interactive terminal. Refusing to expose credentials in non-interactive mode.")
+			os.Exit(1)
+		}
+		fmt.Fprintln(os.Stderr, "WARNING: --show-secrets will display raw credential values.")
+		fmt.Fprintln(os.Stderr, "Only use on YOUR OWN machine for research purposes.")
+		fmt.Fprint(os.Stderr, "Type YES to confirm: ")
+		reader := bufio.NewReader(os.Stdin)
+		confirm, err := reader.ReadString('\n')
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "\nAborted.")
+			os.Exit(1)
+		}
+		if strings.TrimSpace(confirm) != "YES" {
+			fmt.Fprintln(os.Stderr, "Aborted.")
+			os.Exit(1)
 		}
 		showSecrets = true
 	}

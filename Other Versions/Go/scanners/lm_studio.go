@@ -160,8 +160,8 @@ func (s *lmStudioScanner) extractSecrets(
 			FilePermissions: perms,
 			FileOwner:       owner,
 			FileModified:    core.GetFileMtime(path),
-			Remediation:     "Restrict file permissions: chmod 600 " + path,
-			RemediationHint: remediation.HintChmod("600", path),
+			Remediation:     chmodRemediation(path),
+			RemediationHint: chmodRemediationHint(path),
 			Notes:           notes,
 		})
 	}
@@ -268,8 +268,8 @@ func (s *lmStudioScanner) scanEnvFile(path string, result *core.ScanResult, show
 					FilePermissions: perms,
 					FileOwner:       owner,
 					FileModified:    core.GetFileMtime(path),
-					Remediation:     "Restrict file permissions: chmod 600 " + path,
-					RemediationHint: remediation.HintChmod("600", path),
+					Remediation:     chmodRemediation(path),
+					RemediationHint: chmodRemediationHint(path),
 					Notes:           notes,
 				})
 			}

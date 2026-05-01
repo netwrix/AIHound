@@ -135,6 +135,16 @@ func DescribeStaleness(mtime time.Time) string {
 	return fmt.Sprintf("%d years ago", years)
 }
 
+// IsOwnerOnly checks if a file has owner-only permissions (0600 or 0400).
+func IsOwnerOnly(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	perm := info.Mode().Perm()
+	return perm == 0o600 || perm == 0o400
+}
+
 // AssessRisk determines risk level based on storage type and file permissions.
 func AssessRisk(storageType StorageType, path string) RiskLevel {
 	if storageType == EnvironmentVar {
@@ -156,6 +166,9 @@ func AssessRisk(storageType StorageType, path string) RiskLevel {
 				}
 				if IsGroupReadable(path) {
 					return RiskHigh
+				}
+				if IsOwnerOnly(path) {
+					return RiskMedium
 				}
 			}
 		}

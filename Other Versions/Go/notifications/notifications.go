@@ -126,42 +126,63 @@ func notifyLinux(title, body, urgency string) bool {
 	)
 }
 
+// applescriptSafe escapes a string for safe inclusion in AppleScript by
+// splitting on double-quotes and rejoining with the AppleScript `quote` constant.
+func applescriptSafe(s string) string {
+	parts := strings.Split(s, `"`)
+	quoted := make([]string, len(parts))
+	for i, p := range parts {
+		quoted[i] = `"` + p + `"`
+	}
+	return strings.Join(quoted, ` & quote & `)
+}
+
 func notifyMacOS(title, body, urgency string) bool {
-	// osascript: display notification "<body>" with title "AIHound" subtitle "<title>"
-	safeTitle := strings.ReplaceAll(title, `"`, `\"`)
-	safeBody := strings.ReplaceAll(body, `"`, `\"`)
-	script := `display notification "` + safeBody + `" with title "AIHound" subtitle "` + safeTitle + `"`
+	safeTitle := applescriptSafe(title)
+	safeBody := applescriptSafe(body)
+	script := `display notification ` + safeBody + ` with title "AIHound" subtitle ` + safeTitle
 	if urgency == UrgencyCritical {
 		script += ` sound name "Basso"`
 	}
 	return runWithTimeout(5*time.Second, "osascript", "-e", script)
 }
 
+// xmlEscape escapes characters that are special in XML content.
+func xmlEscape(s string) string {
+	s = strings.ReplaceAll(s, "&", "&amp;")
+	s = strings.ReplaceAll(s, "<", "&lt;")
+	s = strings.ReplaceAll(s, ">", "&gt;")
+	return s
+}
+
 func notifyWindows(title, body, urgency string) bool {
-	// PowerShell literal strings use doubled single quotes.
-	safeTitle := strings.ReplaceAll(title, "'", "''")
-	safeBody := strings.ReplaceAll(body, "'", "''")
 	_ = urgency // Windows toast XML here doesn't plumb urgency; retained for API symmetry.
 
-	// Build the PowerShell script. The here-string uses the PowerShell @"..."@
-	// syntax which must begin on its own line, exactly like the Python version.
+	// XML-escape title and body for safe insertion into the toast template.
+	safeTitle := xmlEscape(title)
+	safeBody := xmlEscape(body)
+
+	// Build the PowerShell script using a single-quoted here-string (@'...'@)
+	// which is non-expanding, then use -replace to inject the escaped values.
 	var b strings.Builder
 	b.WriteString("$ErrorActionPreference = 'Stop'\n")
 	b.WriteString("[void][Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType=WindowsRuntime]\n")
-	b.WriteString("$template = @\"\n")
+	b.WriteString("$template = @'\n")
 	b.WriteString("<toast>\n")
 	b.WriteString("  <visual>\n")
 	b.WriteString("    <binding template=\"ToastGeneric\">\n")
-	b.WriteString("      <text>")
-	b.WriteString(safeTitle)
-	b.WriteString("</text>\n")
-	b.WriteString("      <text>")
-	b.WriteString(safeBody)
-	b.WriteString("</text>\n")
+	b.WriteString("      <text>TITLE_PLACEHOLDER</text>\n")
+	b.WriteString("      <text>BODY_PLACEHOLDER</text>\n")
 	b.WriteString("    </binding>\n")
 	b.WriteString("  </visual>\n")
 	b.WriteString("</toast>\n")
-	b.WriteString("\"@\n")
+	b.WriteString("'@\n")
+	// Use PowerShell -replace to substitute placeholders with the escaped values.
+	// Single-quote the replacement strings and double any embedded single quotes.
+	psSafeTitle := strings.ReplaceAll(safeTitle, "'", "''")
+	psSafeBody := strings.ReplaceAll(safeBody, "'", "''")
+	b.WriteString("$template = $template -replace 'TITLE_PLACEHOLDER', '" + psSafeTitle + "'\n")
+	b.WriteString("$template = $template -replace 'BODY_PLACEHOLDER', '" + psSafeBody + "'\n")
 	b.WriteString("$xml = [Windows.Data.Xml.Dom.XmlDocument]::new()\n")
 	b.WriteString("$xml.LoadXml($template)\n")
 	b.WriteString("$toast = [Windows.UI.Notifications.ToastNotification]::new($xml)\n")

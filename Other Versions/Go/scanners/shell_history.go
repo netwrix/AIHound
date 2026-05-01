@@ -141,7 +141,21 @@ func (s *shellHistoryScanner) getHistoryPaths() []string {
 	return paths
 }
 
+const maxHistorySize = 50 * 1024 * 1024 // 50 MB
+
 func (s *shellHistoryScanner) scanHistoryFile(path string, result *core.ScanResult, showSecrets bool) {
+	info, err := os.Stat(path)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			result.Errors = append(result.Errors, fmt.Sprintf("Failed to read %s: %s", path, err))
+		}
+		return
+	}
+	if info.Size() > maxHistorySize {
+		result.Errors = append(result.Errors, fmt.Sprintf("Skipped oversized history file (%d bytes): %s", info.Size(), path))
+		return
+	}
+
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		// File doesn't exist -- not an error
@@ -202,7 +216,7 @@ func (s *shellHistoryScanner) addFinding(
 		credType = "command-line-secret"
 	}
 
-	notes := []string{fmt.Sprintf("Line %d: %s", lineNum, shTruncateLine(lineText, 120))}
+	notes := []string{fmt.Sprintf("Line %d: %s", lineNum, shTruncateLine(core.RedactLine(lineText), 120))}
 	if !mtimeTime.IsZero() {
 		notes = append(notes, "File last modified: "+core.DescribeStaleness(mtimeTime))
 	}

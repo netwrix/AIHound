@@ -199,7 +199,7 @@ func NewNDJSONEventSinkFile(path string) (*NDJSONEventSink, error) {
 	if err != nil {
 		return nil, err
 	}
-	f, err := os.OpenFile(resolved, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	f, err := os.OpenFile(resolved, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		return nil, err
 	}
