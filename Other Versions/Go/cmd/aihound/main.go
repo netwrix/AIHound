@@ -23,7 +23,7 @@ import (
 )
 
 // Version is the current AIHound version.
-const Version = "3.1.1"
+const Version = "3.2.0"
 
 var (
 	flagVersion     = pflag.Bool("version", false, "Show version")
@@ -48,6 +48,9 @@ var (
 
 	// MCP server mode flag
 	flagMCP = pflag.Bool("mcp", false, "Run as an MCP stdio server (use in an MCP client config rather than invoking directly)")
+
+	// BloodHound export flag
+	flagBloodHound = pflag.String("bloodhound", "", "Write BloodHound CE OpenGraph JSON to file (for attack path visualization)")
 )
 
 func parseRiskLevel(s string) (core.RiskLevel, error) {
@@ -231,6 +234,17 @@ func main() {
 		}
 		if !*flagJSON {
 			fmt.Printf("HTML report written to: %s\n", *flagHTMLFile)
+		}
+	}
+
+	// BloodHound OpenGraph JSON output
+	if *flagBloodHound != "" {
+		if err := output.WriteOpenGraph(*flagBloodHound, results); err != nil {
+			fmt.Fprintf(os.Stderr, "Error writing BloodHound export: %v\n", err)
+			os.Exit(1)
+		}
+		if !*flagJSON {
+			fmt.Printf("BloodHound OpenGraph JSON written to: %s\n", *flagBloodHound)
 		}
 	}
 }

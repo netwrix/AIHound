@@ -334,6 +334,10 @@ func looksLikeSecretValue(value string) bool {
 	if strings.HasPrefix(value, "/") || strings.HasPrefix(value, "http") {
 		return false
 	}
+	// npm scoped package names (e.g. @perplexity-ai/mcp-server) — not secrets
+	if strings.HasPrefix(value, "@") && strings.Contains(value, "/") {
+		return false
+	}
 	// Windows paths: drive letter + colon + separator (e.g. C:\foo, d:/bar).
 	// Mostly alphanumeric so they pass the ratio check below — explicit reject.
 	if len(value) >= 3 && unicode.IsLetter(rune(value[0])) &&
