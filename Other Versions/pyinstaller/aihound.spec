@@ -8,7 +8,7 @@ import os
 
 # Resolve project root (parent of pyinstaller/)
 # SPECPATH is set by PyInstaller to the directory containing this .spec file
-project_root = os.path.dirname(SPECPATH)
+project_root = os.path.dirname(os.path.dirname(SPECPATH))
 
 # Entry point
 entry_point = os.path.join(project_root, 'aihound', 'cli.py')
@@ -73,6 +73,7 @@ hidden_imports = [
     'aihound.output.table',
     'aihound.output.json_export',
     'aihound.output.html_report',
+    'aihound.output.opengraph_export',
     # Utility modules
     'aihound.utils',
     'aihound.utils.keychain',
