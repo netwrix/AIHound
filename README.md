@@ -292,7 +292,7 @@ python build.py --clean
 
 ---
 
-## Watch / Monitor Mode 
+# Watch / Monitor Mode 
 
 AIHound can run continuously and alert you the moment a new credential appears, a file's permissions change, or a local AI server starts listening on `0.0.0.0`. Perfect for individual developers — leave it running in a terminal tab or background tmux pane.
 
@@ -351,7 +351,11 @@ Pipe into `jq`, `grep`, a log shipper, a SIEM, whatever.
 
 ---
 
-## BloodHound Attack Path Visualization (v3.2.0)
+# BloodHound Attack Path Visualization 
+
+<img width="1273" height="796" alt="bhcritical" src="https://github.com/user-attachments/assets/6813d649-b1e0-45fb-90bc-5f5efa07bafa" />
+
+<br>
 
 AIHound can export scan results as [BloodHound CE](https://github.com/SpecterOps/BloodHound) OpenGraph JSON, enabling interactive attack path visualization of your AI credential exposure. Think SharpHound for the AI tool ecosystem.
 
@@ -466,152 +470,9 @@ All flags are the same across all three versions:
 | `--debounce SECONDS` | Suppress duplicate events within window (default: 10) |
 | `--mcp` | Run as MCP stdio server (requires `pip install aihound[mcp]`) |
 
-### Available Scanners (29 total)
-
-| Slug | Tool |
-|------|------|
-| `aider` | Aider |
-| `amazon-q` | Amazon Q / AWS |
-| `browser-sessions` | Browser Sessions (Firefox + Chromium stub) |
-| `chatgpt` | ChatGPT Desktop |
-| `claude-code` | Claude Code CLI |
-| `claude-desktop` | Claude Desktop |
-| `claude-sessions` | Claude Sessions (active processes, live tokens, tmux/screen, MCP exposure) |
-| `cline` | Cline (VS Code) |
-| `continue-dev` | Continue.dev |
-| `cursor` | Cursor IDE |
-| `docker` | Docker |
-| `envvars` | Environment Variables |
-| `gemini` | Gemini CLI / GCloud |
-| `git-credentials` | Git Credentials |
-| `github-copilot` | GitHub Copilot |
-| `huggingface` | Hugging Face CLI |
-| `jupyter` | Jupyter |
-| `lm-studio` | LM Studio |
-| `ml-platforms` | ML Platforms (Replicate / Together / Groq) |
-| `network-exposure` | AI Network Exposure |
-| `ollama` | Ollama |
-| `openai-cli` | OpenAI / Codex CLI |
-| `openclaw` | OpenClaw |
-| `persistent-env` | Persistent Environment (Linux `/etc/environment`, macOS LaunchAgents, Windows registry) |
-| `powershell` | PowerShell Logs |
-| `shell-history` | Shell History (bash, zsh, fish) |
-| `shell-rc` | Shell RC Files (`.bashrc`, `.zshrc`, fish config, `.env` files) |
-| `vscode-extensions` | VS Code Extensions |
-| `windsurf` | Windsurf |
-
 ---
 
-## Comparison
-
-| | Go Binary | PyInstaller .exe | Python Source |
-|---|---|---|---|
-| **Size** | ~12 MB | ~14 MB | N/A (needs Python) |
-| **Startup** | Instant | ~1-5s (extract, varies with AV) | Instant |
-| **Runtime Dependencies** | None | None | Python 3.10+ |
-| **Cross-Compile** | Yes (any OS to any OS) | No (must build on Windows) | N/A |
-| **Supported Platforms** | Windows, macOS, Linux, WSL | Windows only | Windows, macOS, Linux, WSL |
-| **Scanners** | 29 | 29 | 29 |
-| **Update** | Recompile | Rebuild .exe | git pull |
-
-
-## Output Formats
-
-### CLI Table (default)
-
-```
-+-+-+-+-+-+-+-+
-|N|e|t|w|r|i|x|
-+-+-+-+-+-+-+-+
-    ___    ______  __                      __          / \__
-   /   |  /  _/ / / /___  __  ______  ____/ /         (    @\___
-  / /| |  / // /_/ / __ \/ / / / __ \/ __  /          /         O
- / ___ |_/ // __  / /_/ / /_/ / / / / /_/ /          /   (_____/
-/_/  |_/___/_/ /_/\____/\__,_/_/ /_/\__,_/          /_____/   U
-
-  AI Credential & Secrets Scanner      Written by DFIRDeferred
-  For authorized use only. Use on systems you own or have permission to test.
-
-Tool             Credential Type        Storage      Location                            Risk
--------------------------------------------------------------------------------------------------
-Claude Code CLI  oauth_access_token     plaintext... ~/.claude/.credentials.json          CRITICAL
-                   Value: sk-ant-oat01-Z...eAAA
-                   Note: File last modified: 2 hours ago
-                   Perms: 0600 (owner-only) Owner: ull
-                   Fix: Restrict file permissions: chmod 600 ~/.claude/.credentials.json
-
-Summary: 2 findings | 1 CRITICAL | 1 HIGH
-```
-
-In verbose mode (`-v`), each finding includes:
-- `Last modified:` — when the credential file was last touched, with human-readable staleness ("3 hours ago", "45 days ago")
-- `Fix:` — actionable remediation guidance specific to the finding
-
-### HTML Report (`--html-file`)
-
-Self-contained HTML file with the AIHound banner, dark theme, color-coded risk badges, and a sortable findings table. Permissions are shown with human-readable descriptions like `0777 (world-writable, world-readable, DANGEROUS)`.
-
-### JSON Report (`--json` or `--json-file`)
-
-Machine-readable output with full metadata — timestamps, platform info, risk summaries, and per-finding details.
-
-## Risk Levels
-
-| Level | Meaning | Example |
-|---|---|---|
-| **CRITICAL** | Plaintext + world-readable, unauthenticated network exposure, or empty auth token | `0777` credential file; Ollama/Jupyter API on `0.0.0.0`; empty `c.NotebookApp.token = ''` |
-| **HIGH** | Plaintext + user-readable only, or dangerous server config | `0600` credential file; `OLLAMA_HOST=0.0.0.0` in systemd; known API key prefix in PowerShell history |
-| **MEDIUM** | OS credential store, env var, or encrypted DB | Keychain, Credential Manager, `$ANTHROPIC_API_KEY`, Firefox sessionStorage |
-| **LOW** | Encrypted or not present | VS Code encrypted SQLite storage |
-| **INFO** | Metadata only, no secret value | Env var reference `${GITHUB_TOKEN}`, `credsStore` pointing to a credential helper, Chromium browser detected (not parseable) |
-
-## Adding a New Scanner
-
-Create a new file in `aihound/scanners/` with a class that extends `BaseScanner`:
-
-```python
-from aihound.core.scanner import BaseScanner, ScanResult
-from aihound.scanners import register
-
-@register
-class MyToolScanner(BaseScanner):
-    def name(self) -> str:
-        return "My AI Tool"
-
-    def slug(self) -> str:
-        return "my-tool"
-
-    def scan(self, show_secrets: bool = False) -> ScanResult:
-        # Check file paths, parse configs, report findings
-        ...
-```
-
-The `@register` decorator auto-discovers it. No other files need editing.
-
-See `Full-Technical-Doc.md` for complete technical reference — every scanner's paths, detection logic, storage types, and remediation strings documented in detail.
-
-## Project Structure
-
-```
-aihound/
-├── core/
-│   ├── scanner.py       # BaseScanner, CredentialFinding, ScanResult, enums
-│   ├── platform.py      # OS detection (Linux/macOS/Windows/WSL), path resolution
-│   ├── redactor.py      # Secret masking with known prefix detection
-│   ├── permissions.py   # File permission analysis + human-readable descriptions
-│   └── mcp.py           # Shared MCP config parser (used by multiple scanners)
-├── scanners/            # One file per tool, auto-discovered via @register
-├── output/
-│   ├── table.py         # CLI table with ANSI colors
-│   ├── json_export.py   # JSON report
-│   └── html_report.py   # Self-contained HTML report with embedded banner
-└── utils/
-    ├── keychain.py      # macOS Keychain queries
-    ├── credman.py       # Windows Credential Manager queries
-    └── vscdb.py         # VS Code SQLite state.vscdb reader
-```
-
-## MCP Server Mode (v3.0.0)
+# MCP Server Mode (v3.0.0)
 
 ### What is this?
 
@@ -911,13 +772,115 @@ Seven action types: `chmod`, `migrate_to_env`, `change_config_value`, `run_comma
 
 ---
 
-## Security & Ethics
+# Output Formats
+
+### CLI Table (default)
+
+```
++-+-+-+-+-+-+-+
+|N|e|t|w|r|i|x|
++-+-+-+-+-+-+-+
+    ___    ______  __                      __          / \__
+   /   |  /  _/ / / /___  __  ______  ____/ /         (    @\___
+  / /| |  / // /_/ / __ \/ / / / __ \/ __  /          /         O
+ / ___ |_/ // __  / /_/ / /_/ / / / / /_/ /          /   (_____/
+/_/  |_/___/_/ /_/\____/\__,_/_/ /_/\__,_/          /_____/   U
+
+  AI Credential & Secrets Scanner      Written by DFIRDeferred
+  For authorized use only. Use on systems you own or have permission to test.
+
+Tool             Credential Type        Storage      Location                            Risk
+-------------------------------------------------------------------------------------------------
+Claude Code CLI  oauth_access_token     plaintext... ~/.claude/.credentials.json          CRITICAL
+                   Value: sk-ant-oat01-Z...eAAA
+                   Note: File last modified: 2 hours ago
+                   Perms: 0600 (owner-only) Owner: ull
+                   Fix: Restrict file permissions: chmod 600 ~/.claude/.credentials.json
+
+Summary: 2 findings | 1 CRITICAL | 1 HIGH
+```
+
+In verbose mode (`-v`), each finding includes:
+- `Last modified:` — when the credential file was last touched, with human-readable staleness ("3 hours ago", "45 days ago")
+- `Fix:` — actionable remediation guidance specific to the finding
+
+### HTML Report (`--html-file`)
+
+Self-contained HTML file with the AIHound banner, dark theme, color-coded risk badges, and a sortable findings table. Permissions are shown with human-readable descriptions like `0777 (world-writable, world-readable, DANGEROUS)`.
+
+### JSON Report (`--json` or `--json-file`)
+
+Machine-readable output with full metadata — timestamps, platform info, risk summaries, and per-finding details.
+
+## Risk Levels
+
+| Level | Meaning | Example |
+|---|---|---|
+| **CRITICAL** | Plaintext + world-readable, unauthenticated network exposure, or empty auth token | `0777` credential file; Ollama/Jupyter API on `0.0.0.0`; empty `c.NotebookApp.token = ''` |
+| **HIGH** | Plaintext + user-readable only, or dangerous server config | `0600` credential file; `OLLAMA_HOST=0.0.0.0` in systemd; known API key prefix in PowerShell history |
+| **MEDIUM** | OS credential store, env var, or encrypted DB | Keychain, Credential Manager, `$ANTHROPIC_API_KEY`, Firefox sessionStorage |
+| **LOW** | Encrypted or not present | VS Code encrypted SQLite storage |
+| **INFO** | Metadata only, no secret value | Env var reference `${GITHUB_TOKEN}`, `credsStore` pointing to a credential helper, Chromium browser detected (not parseable) |
+
+## Adding a New Scanner
+
+Create a new file in `aihound/scanners/` with a class that extends `BaseScanner`:
+
+```python
+from aihound.core.scanner import BaseScanner, ScanResult
+from aihound.scanners import register
+
+@register
+class MyToolScanner(BaseScanner):
+    def name(self) -> str:
+        return "My AI Tool"
+
+    def slug(self) -> str:
+        return "my-tool"
+
+    def scan(self, show_secrets: bool = False) -> ScanResult:
+        # Check file paths, parse configs, report findings
+        ...
+```
+
+The `@register` decorator auto-discovers it. No other files need editing.
+
+See `Full-Technical-Doc.md` for complete technical reference — every scanner's paths, detection logic, storage types, and remediation strings documented in detail.
+
+---
+
+# Project Structure
+
+```
+aihound/
+├── core/
+│   ├── scanner.py       # BaseScanner, CredentialFinding, ScanResult, enums
+│   ├── platform.py      # OS detection (Linux/macOS/Windows/WSL), path resolution
+│   ├── redactor.py      # Secret masking with known prefix detection
+│   ├── permissions.py   # File permission analysis + human-readable descriptions
+│   └── mcp.py           # Shared MCP config parser (used by multiple scanners)
+├── scanners/            # One file per tool, auto-discovered via @register
+├── output/
+│   ├── table.py         # CLI table with ANSI colors
+│   ├── json_export.py   # JSON report
+│   └── html_report.py   # Self-contained HTML report with embedded banner
+└── utils/
+    ├── keychain.py      # macOS Keychain queries
+    ├── credman.py       # Windows Credential Manager queries
+    └── vscdb.py         # VS Code SQLite state.vscdb reader
+```
+
+---
+
+# Security & Ethics
 
 This tool is for **authorized security research, penetration testing, and defensive security assessments only**. Use it on systems you own or have explicit authorization to test.
 
 - Credentials are **redacted by default** — `--show-secrets` requires explicit `YES` confirmation
 - The tool is **read-only** — it never modifies, exfiltrates, or transmits any credentials
 - JSON output **never includes raw values** even with `--show-secrets`
+
+---
 
 ## License
 
