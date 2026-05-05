@@ -107,8 +107,11 @@ Every finding includes **actionable remediation guidance** and **file staleness*
 
 ---
 
+<br>
+
 # Installation
-### **Precompiled .exe version can be found [Here](https://github.com/netwrix/AIHound/tree/main/Other%20Versions/pyinstaller/dist)**
+### **PyInstaller Precompiled .exe version can be found [Here](https://github.com/netwrix/AIHound/tree/main/Other%20Versions/pyinstaller/dist)**
+### **Go Precompiled .exe version can be found [Here](https://github.com/netwrix/AIHound/tree/main/Other%20Versions/Go/dist)**
 
 AIHound can be run four ways: from Python source, using the Go runtime. as a compiled Go binary, or as a standalone Windows executable (via PyInstaller).
 
@@ -289,8 +292,9 @@ PyInstaller caches intermediate build artifacts in `pyinstaller/build/`. To do a
 cd pyinstaller
 python build.py --clean
 ```
-
 ---
+
+<br>
 
 # Watch / Monitor Mode 
 
@@ -350,6 +354,8 @@ With `--watch-log <path>` or `--json`, events are emitted as one JSON object per
 Pipe into `jq`, `grep`, a log shipper, a SIEM, whatever.
 
 ---
+
+<br>
 
 # BloodHound Attack Path Visualization 
 
@@ -471,6 +477,8 @@ All flags are the same across all three versions:
 | `--mcp` | Run as MCP stdio server (requires `pip install aihound[mcp]`) |
 
 ---
+
+<br>
 
 # MCP Server Mode (v3.0.0)
 
@@ -772,6 +780,8 @@ Seven action types: `chmod`, `migrate_to_env`, `change_config_value`, `run_comma
 
 ---
 
+<br>
+
 # Output Formats
 
 ### CLI Table (default)
@@ -849,6 +859,8 @@ See `Full-Technical-Doc.md` for complete technical reference — every scanner's
 
 ---
 
+<br>
+
 # Project Structure
 
 ```
@@ -871,6 +883,8 @@ aihound/
 ```
 
 ---
+
+<br>
 
 # Security & Ethics
 
