@@ -77,6 +77,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Custom banner image for HTML report (default: aihound.png)",
     )
     parser.add_argument(
+        "--bloodhound",
+        type=str,
+        metavar="PATH",
+        help="Write BloodHound CE OpenGraph JSON to file (for attack path visualization)",
+    )
+    parser.add_argument(
         "--tools",
         nargs="+",
         metavar="TOOL",
@@ -278,6 +284,27 @@ def main(argv: list[str] | None = None) -> int:
         logger.info("HTML report written to: %s", out_path)
         if not args.json_output:
             print(f"HTML report written to: {out_path}")
+
+    if args.bloodhound:
+        out_path = _prepare_output_path(args.bloodhound, "BloodHound")
+        if out_path is None:
+            return 1
+        try:
+            from aihound.output.opengraph_export import export_opengraph
+            export_opengraph(results, filepath=str(out_path))
+        except ImportError:
+            print(
+                "ERROR: aihound400 package not found. Ensure the aihound400 directory "
+                "is in your Python path.",
+                file=sys.stderr,
+            )
+            return 1
+        except OSError as e:
+            print(f"ERROR: Failed to write BloodHound export to {out_path}: {e}", file=sys.stderr)
+            return 1
+        logger.info("BloodHound OpenGraph JSON written to: %s", out_path)
+        if not args.json_output:
+            print(f"BloodHound OpenGraph JSON written to: {out_path}")
 
     return 0
 

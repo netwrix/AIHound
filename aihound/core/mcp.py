@@ -68,6 +68,31 @@ KNOWN_NON_SECRET_KEYS = {
 ENV_VAR_REFERENCE_PATTERN = "${"
 
 
+def _collect_mcp_blocks(data: dict) -> list[tuple[dict, str]]:
+    """Gather all mcpServers maps: top-level and per-project.
+
+    Returns a list of (servers_dict, project_path) tuples.
+    project_path is empty string for the top-level block.
+    """
+    blocks: list[tuple[dict, str]] = []
+
+    # Top-level mcpServers
+    top = data.get("mcpServers", {})
+    if isinstance(top, dict) and top:
+        blocks.append((top, ""))
+
+    # Per-project mcpServers (projects.<path>.mcpServers)
+    projects = data.get("projects", {})
+    if isinstance(projects, dict):
+        for proj_path, proj_cfg in projects.items():
+            if isinstance(proj_cfg, dict):
+                proj_servers = proj_cfg.get("mcpServers", {})
+                if isinstance(proj_servers, dict) and proj_servers:
+                    blocks.append((proj_servers, proj_path))
+
+    return blocks
+
+
 def parse_mcp_config(
     data: dict,
     source_path: Path,
@@ -77,115 +102,64 @@ def parse_mcp_config(
     """Parse mcpServers from any tool's config and find embedded credentials.
 
     Works with Claude Desktop, Claude Code, Cursor, Cline, VS Code MCP configs.
+    Scans both top-level mcpServers and per-project mcpServers blocks
+    (projects.<path>.mcpServers).
     """
     findings = []
-    mcp_servers = data.get("mcpServers", {})
-    if not isinstance(mcp_servers, dict):
+    blocks = _collect_mcp_blocks(data)
+    if not blocks:
         return findings
 
     perms = get_file_permissions(source_path)
     owner = get_file_owner(source_path)
 
-    for server_name, server_config in mcp_servers.items():
-        if not isinstance(server_config, dict):
-            continue
+    for mcp_servers, project_path in blocks:
+        for server_name, server_config in mcp_servers.items():
+            if not isinstance(server_config, dict):
+                continue
 
-        # Check env block for secrets
-        env = server_config.get("env", {})
-        if isinstance(env, dict):
-            for key, value in env.items():
-                if not isinstance(value, str):
-                    continue
+            def _build_notes(*extra: str) -> list[str]:
+                notes = [f"MCP server: {server_name}"]
+                if project_path:
+                    notes.append(f"Project scope: {project_path}")
+                notes.extend(extra)
+                mtime = get_file_mtime(source_path)
+                if mtime is not None:
+                    notes.append(f"Config last modified {describe_staleness(mtime)}")
+                return notes
 
-                # Allowlist: PATH-family / locale / shell vars are never secrets
-                if key.upper() in KNOWN_NON_SECRET_KEYS:
-                    continue
+            # Check env block for secrets
+            env = server_config.get("env", {})
+            if isinstance(env, dict):
+                for key, value in env.items():
+                    if not isinstance(value, str):
+                        continue
 
-                if _is_env_var_reference(value):
-                    # This references an external env var, not an inline secret
-                    mtime = get_file_mtime(source_path)
-                    notes = [
-                        f"MCP server: {server_name}",
-                        "References environment variable (not inline secret)",
-                    ]
-                    if mtime is not None:
-                        notes.append(f"Config last modified {describe_staleness(mtime)}")
-                    findings.append(CredentialFinding(
-                        tool_name=tool_name,
-                        credential_type=f"mcp_env_ref:{key}",
-                        storage_type=StorageType.PLAINTEXT_JSON,
-                        location=str(source_path),
-                        exists=True,
-                        risk_level=RiskLevel.INFO,
-                        value_preview=value,
-                        notes=notes,
-                        file_modified=mtime,
-                        remediation="Verify env var is set in a secure environment, not committed to source",
-                        remediation_hint=hint_manual(
-                            "Verify env var is set in a secure environment, not committed to source"
-                        ),
-                    ))
-                elif _looks_like_secret_key(key) or _looks_like_secret_value(value):
-                    mtime = get_file_mtime(source_path)
-                    notes = [f"MCP server: {server_name}", "Inline secret in config"]
-                    if mtime is not None:
-                        notes.append(f"Config last modified {describe_staleness(mtime)}")
-                    findings.append(CredentialFinding(
-                        tool_name=tool_name,
-                        credential_type=f"mcp_env:{key}",
-                        storage_type=StorageType.PLAINTEXT_JSON,
-                        location=str(source_path),
-                        exists=True,
-                        risk_level=assess_risk(StorageType.PLAINTEXT_JSON, source_path),
-                        value_preview=mask_value(value, show_full=show_secrets),
-                        raw_value=value if show_secrets else None,
-                        file_permissions=perms,
-                        file_owner=owner,
-                        notes=notes,
-                        file_modified=mtime,
-                        remediation="Move secret to environment variable or secret manager",
-                        remediation_hint=hint_migrate_to_env([], str(source_path)),
-                    ))
+                    # Allowlist: PATH-family / locale / shell vars are never secrets
+                    if key.upper() in KNOWN_NON_SECRET_KEYS:
+                        continue
 
-        # Check headers block (for HTTP transport MCP servers)
-        headers = server_config.get("headers", {})
-        if isinstance(headers, dict):
-            for key, value in headers.items():
-                if not isinstance(value, str):
-                    continue
-                key_lower = key.lower()
-                if key_lower in ("authorization", "x-api-key", "api-key"):
                     if _is_env_var_reference(value):
-                        mtime = get_file_mtime(source_path)
-                        notes = [
-                            f"MCP server: {server_name}",
-                            "References environment variable",
-                        ]
-                        if mtime is not None:
-                            notes.append(f"Config last modified {describe_staleness(mtime)}")
+                        # This references an external env var, not an inline secret
                         findings.append(CredentialFinding(
                             tool_name=tool_name,
-                            credential_type=f"mcp_header:{key}",
+                            credential_type=f"mcp_env_ref:{key}",
                             storage_type=StorageType.PLAINTEXT_JSON,
                             location=str(source_path),
                             exists=True,
                             risk_level=RiskLevel.INFO,
                             value_preview=value,
-                            notes=notes,
-                            file_modified=mtime,
+                            notes=_build_notes("References environment variable (not inline secret)"),
+                            file_modified=get_file_mtime(source_path),
                             remediation="Verify env var is set in a secure environment, not committed to source",
                             remediation_hint=hint_manual(
                                 "Verify env var is set in a secure environment, not committed to source"
                             ),
                         ))
-                    else:
-                        mtime = get_file_mtime(source_path)
-                        notes = [f"MCP server: {server_name}", "Inline auth header"]
-                        if mtime is not None:
-                            notes.append(f"Config last modified {describe_staleness(mtime)}")
+                    elif _looks_like_secret_key(key) or _looks_like_secret_value(value):
                         findings.append(CredentialFinding(
                             tool_name=tool_name,
-                            credential_type=f"mcp_header:{key}",
+                            credential_type=f"mcp_env:{key}",
                             storage_type=StorageType.PLAINTEXT_JSON,
                             location=str(source_path),
                             exists=True,
@@ -194,39 +168,77 @@ def parse_mcp_config(
                             raw_value=value if show_secrets else None,
                             file_permissions=perms,
                             file_owner=owner,
-                            notes=notes,
-                            file_modified=mtime,
+                            notes=_build_notes("Inline secret in config"),
+                            file_modified=get_file_mtime(source_path),
                             remediation="Move secret to environment variable or secret manager",
                             remediation_hint=hint_migrate_to_env([], str(source_path)),
                         ))
 
-        # Check args for tokens (some MCP servers pass tokens as CLI args)
-        args = server_config.get("args", [])
-        if isinstance(args, list):
-            for i, arg in enumerate(args):
-                if not isinstance(arg, str):
-                    continue
-                if _looks_like_secret_value(arg) and not arg.startswith("-"):
-                    mtime = get_file_mtime(source_path)
-                    notes = [f"MCP server: {server_name}", f"Token in CLI arg position {i}"]
-                    if mtime is not None:
-                        notes.append(f"Config last modified {describe_staleness(mtime)}")
-                    findings.append(CredentialFinding(
-                        tool_name=tool_name,
-                        credential_type=f"mcp_arg[{i}]",
-                        storage_type=StorageType.PLAINTEXT_JSON,
-                        location=str(source_path),
-                        exists=True,
-                        risk_level=assess_risk(StorageType.PLAINTEXT_JSON, source_path),
-                        value_preview=mask_value(arg, show_full=show_secrets),
-                        raw_value=arg if show_secrets else None,
-                        file_permissions=perms,
-                        file_owner=owner,
-                        notes=notes,
-                        file_modified=mtime,
-                        remediation="Move secret to environment variable or secret manager",
-                        remediation_hint=hint_migrate_to_env([], str(source_path)),
-                    ))
+            # Check headers block (for HTTP transport MCP servers)
+            headers = server_config.get("headers", {})
+            if isinstance(headers, dict):
+                for key, value in headers.items():
+                    if not isinstance(value, str):
+                        continue
+                    key_lower = key.lower()
+                    if key_lower in ("authorization", "x-api-key", "api-key"):
+                        if _is_env_var_reference(value):
+                            findings.append(CredentialFinding(
+                                tool_name=tool_name,
+                                credential_type=f"mcp_header:{key}",
+                                storage_type=StorageType.PLAINTEXT_JSON,
+                                location=str(source_path),
+                                exists=True,
+                                risk_level=RiskLevel.INFO,
+                                value_preview=value,
+                                notes=_build_notes("References environment variable"),
+                                file_modified=get_file_mtime(source_path),
+                                remediation="Verify env var is set in a secure environment, not committed to source",
+                                remediation_hint=hint_manual(
+                                    "Verify env var is set in a secure environment, not committed to source"
+                                ),
+                            ))
+                        else:
+                            findings.append(CredentialFinding(
+                                tool_name=tool_name,
+                                credential_type=f"mcp_header:{key}",
+                                storage_type=StorageType.PLAINTEXT_JSON,
+                                location=str(source_path),
+                                exists=True,
+                                risk_level=assess_risk(StorageType.PLAINTEXT_JSON, source_path),
+                                value_preview=mask_value(value, show_full=show_secrets),
+                                raw_value=value if show_secrets else None,
+                                file_permissions=perms,
+                                file_owner=owner,
+                                notes=_build_notes("Inline auth header"),
+                                file_modified=get_file_mtime(source_path),
+                                remediation="Move secret to environment variable or secret manager",
+                                remediation_hint=hint_migrate_to_env([], str(source_path)),
+                            ))
+
+            # Check args for tokens (some MCP servers pass tokens as CLI args)
+            args = server_config.get("args", [])
+            if isinstance(args, list):
+                for i, arg in enumerate(args):
+                    if not isinstance(arg, str):
+                        continue
+                    if _looks_like_secret_value(arg) and not arg.startswith("-"):
+                        findings.append(CredentialFinding(
+                            tool_name=tool_name,
+                            credential_type=f"mcp_arg[{i}]",
+                            storage_type=StorageType.PLAINTEXT_JSON,
+                            location=str(source_path),
+                            exists=True,
+                            risk_level=assess_risk(StorageType.PLAINTEXT_JSON, source_path),
+                            value_preview=mask_value(arg, show_full=show_secrets),
+                            raw_value=arg if show_secrets else None,
+                            file_permissions=perms,
+                            file_owner=owner,
+                            notes=_build_notes(f"Token in CLI arg position {i}"),
+                            file_modified=get_file_mtime(source_path),
+                            remediation="Move secret to environment variable or secret manager",
+                            remediation_hint=hint_migrate_to_env([], str(source_path)),
+                        ))
 
     return findings
 
@@ -274,6 +286,9 @@ def _looks_like_secret_value(value: str) -> bool:
     if len(value) < 20:
         return False
     if value.startswith("/") or value.startswith("http"):
+        return False
+    # npm scoped package names (e.g. @perplexity-ai/mcp-server) — not secrets
+    if value.startswith("@") and "/" in value:
         return False
     # Windows paths: drive letter + colon + separator (e.g. C:\foo, d:/bar)
     if len(value) >= 3 and value[0].isalpha() and value[1] == ":" and value[2] in ("\\", "/"):
