@@ -292,7 +292,7 @@ python build.py --clean
 
 ---
 
-## Watch / Monitor Mode (v3.0.0)
+## Watch / Monitor Mode 
 
 AIHound can run continuously and alert you the moment a new credential appears, a file's permissions change, or a local AI server starts listening on `0.0.0.0`. Perfect for individual developers — leave it running in a terminal tab or background tmux pane.
 
@@ -348,6 +348,96 @@ With `--watch-log <path>` or `--json`, events are emitted as one JSON object per
 ```
 
 Pipe into `jq`, `grep`, a log shipper, a SIEM, whatever.
+
+---
+
+## BloodHound Attack Path Visualization (v3.2.0)
+
+AIHound can export scan results as [BloodHound CE](https://github.com/SpecterOps/BloodHound) OpenGraph JSON, enabling interactive attack path visualization of your AI credential exposure. Think SharpHound for the AI tool ecosystem.
+
+```bash
+aihound --bloodhound aihound-bloodhound.json    # generate OpenGraph JSON
+```
+
+Upload the file to BloodHound CE (v8.0+) via **Data Collection > File Ingest** and explore credential relationships as an interactive graph.
+
+### What you see in BloodHound
+
+The graph maps how an attacker could move from a compromised credential to sensitive data:
+
+```
+AITool (Claude Code CLI)
+    --> UsesMCPServer --> MCPServer (perplexity)
+        --> RequiresCredential --> AICredential (PERPLEXITY_API_KEY)
+            --> Authenticates --> AIService (Perplexity)
+
+ConfigFile (.credentials.json)
+    --> ContainsCredential --> AICredential (sk-ant-...)
+        --> Authenticates --> AIService (Anthropic)
+            --> GrantsAccessTo --> DataStore (Conversation History)
+```
+
+### Custom node types (14)
+
+| Icon | Node Type | What It Represents |
+|------|-----------|--------------------|
+| Key | AICredential | API keys, OAuth tokens, session tokens |
+| Cloud | AIService | OpenAI, Anthropic, AWS Bedrock, Google AI, etc. |
+| Plug | MCPServer | MCP server instances configured in your AI tools |
+| File | ConfigFile | Config files that contain credentials |
+| Terminal | EnvVariable | Environment variables holding secrets |
+| Wrench | AITool | Claude Code, Cursor, Copilot, Docker, etc. |
+| Globe | NetworkEndpoint | AI services exposed on the network (Ollama on 0.0.0.0) |
+| Database | DataStore | Conversation history, fine-tuning data, model repos, billing |
+| Lock | CredentialStore | macOS Keychain, Windows Credential Manager |
+| Scroll | ShellHistory | Shell history files with leaked credentials |
+| Cube | DockerConfig | Docker daemon configs with registry auth |
+| Window | BrowserSession | Browser sessions for AI services |
+| Branch | GitCredential | Git credential helpers / .git-credentials |
+| Book | JupyterInstance | Jupyter notebook servers |
+
+### Setup
+
+**1. Register custom node types** (once per BloodHound instance):
+
+```bash
+python3 register_ai_nodes.py -s http://localhost:8080 -u admin -p <password>
+```
+
+**2. Run scan and export:**
+
+```bash
+aihound --bloodhound output.json
+```
+
+**3. Upload** `output.json` to BloodHound CE via Data Collection > File Ingest.
+
+**4. Query attack paths** using the pre-built Cypher queries in `cypher_queries.cy`:
+
+```cypher
+// Full graph — all AI credential relationships
+MATCH path = (a:AIHound)-[r]->(b:AIHound) RETURN path
+
+// Blast radius from critical credentials
+MATCH path = (c:AICredential)-[*1..4]->(target)
+WHERE c.risk_level = "critical"
+RETURN path
+
+// MCP server attack chain
+MATCH path = (t:AITool)-[:UsesMCPServer]->(m:MCPServer)-[:RequiresCredential]->(c:AICredential)-[:Authenticates]->(s:AIService)
+RETURN path
+
+// Same secret in multiple locations
+MATCH path = (c1:AICredential)-[:SameSecret]->(c2:AICredential)
+RETURN path
+
+// What breaks if I rotate this key?
+MATCH path = (t:AITool)-[:UsesMCPServer]->(m:MCPServer)-[:RequiresCredential]->(c:AICredential)
+WHERE c.credential_type CONTAINS "PERPLEXITY"
+RETURN path
+```
+
+See `BLOODHOUND_GUIDE.md` for the full step-by-step walkthrough and `cypher_queries.cy` for all 29 pre-built queries.
 
 ---
 
@@ -520,14 +610,6 @@ aihound/
     ├── credman.py       # Windows Credential Manager queries
     └── vscdb.py         # VS Code SQLite state.vscdb reader
 ```
-
-## Security & Ethics
-
-This tool is for **authorized security research, penetration testing, and defensive security assessments only**. Use it on systems you own or have explicit authorization to test.
-
-- Credentials are **redacted by default** — `--show-secrets` requires explicit `YES` confirmation
-- The tool is **read-only** — it never modifies, exfiltrates, or transmits any credentials
-- JSON output **never includes raw values** even with `--show-secrets`
 
 ## MCP Server Mode (v3.0.0)
 
@@ -828,6 +910,14 @@ Seven action types: `chmod`, `migrate_to_env`, `change_config_value`, `run_comma
 > Claude: calls `aihound_scan(min_risk="critical")` → gets back 4 findings with `remediation_hint` dicts → reads each hint → runs `chmod 600 ~/.claude/.credentials.json` via its filesystem tool → calls `aihound_scan(force=True)` to verify → reports back.
 
 ---
+
+## Security & Ethics
+
+This tool is for **authorized security research, penetration testing, and defensive security assessments only**. Use it on systems you own or have explicit authorization to test.
+
+- Credentials are **redacted by default** — `--show-secrets` requires explicit `YES` confirmation
+- The tool is **read-only** — it never modifies, exfiltrates, or transmits any credentials
+- JSON output **never includes raw values** even with `--show-secrets`
 
 ## License
 
