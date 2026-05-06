@@ -206,4 +206,4 @@ Continue.dev stores API keys in plaintext in `~/.continue/config.json`. Use the 
 - Generate an HTML report for your team: `python3 -m aihound --html-file report.html`
 - Export to BloodHound for attack path visualization: `python3 -m aihound --bloodhound bloodhound.json`
 - See `BLOODHOUND_GUIDE.md` for the full BloodHound walkthrough
-- Check the full [README](README.md) for watch mode, MCP server mode, and advanced usage
+- Check the full Documentation [Here](https://github.com/netwrix/AIHound/tree/main/docs) for watch mode, MCP server mode, and advanced usage
