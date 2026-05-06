@@ -2,10 +2,6 @@
 
 **AI Credential & Secrets Scanner**
 
-<p align="center">
-  <img src="aihound.png" alt="AIHound" width="500">
-</p>
-
 AIHound scans your system for credentials, secrets, and tokens stored by popular AI desktop applications and coding assistants. It checks config files, credential stores, MCP server configurations, and environment variables — then reports what it finds with risk-rated output.
 
 This is a security research tool. Credentials are **redacted by default** so output is safe to share in reports and screenshots.
