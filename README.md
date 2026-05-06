@@ -6,7 +6,7 @@
   <img src="aihound.png" alt="AIHound" width="500">
 </p>
 
-AIHound is an AI credential and secrets scanner that detects exposed API keys, OAuth tokens, MCP server secrets, and session credentials across 29 AI tools on Windows, macOS, Linux, and WSL. Beyond one-shot scanning with terminal, it offers a watch mode for continuous monitoring that alerts on new, changed, or escalated credentials in real time.
+AIHound is an AI Assistant credential and secrets scanner that detects exposed API keys, OAuth tokens, MCP server secrets, and session credentials across 29 AI tools on Windows, macOS, Linux, and WSL. Beyond one-shot scanning with terminal, it offers a watch mode for continuous monitoring that alerts on new, changed, or escalated credentials in real time.
 
   AIHound includes an MCP server mode that lets AI assistants like Claude Code scan for and remediate credential issues programmatically. 
   
