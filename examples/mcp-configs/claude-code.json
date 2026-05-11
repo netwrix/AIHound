@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "aihound": {
-      "command": "aihound",
-      "args": ["--mcp"]
-    }
-  }
-}
