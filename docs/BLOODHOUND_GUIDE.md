@@ -10,17 +10,17 @@ AIHound scans your machine for AI credentials (API keys, OAuth tokens, MCP serve
 
 - Python 3.10+
 - AIHound installed (this repo)
-- BloodHound CE v8.0+ running (Docker recommended)
+- BloodHound CE v9.x running (Docker recommended)
   - Default: `http://localhost:8080`
 
 ---
 
-## Step 1: Register Custom Node Types (One Time Only)
+## Step 1: Register Custom Node Types & Saved Queries (One Time Only)
 
-Before BloodHound can display AI credential nodes with proper icons, you need to register AIHound's custom node types. **You only need to do this once per BloodHound instance.**
+Before BloodHound can display AI credential nodes with proper icons, you need to register AIHound's custom node types. The script also imports 29 pre-built Cypher queries into BloodHound's **Saved Queries** panel. **You only need to do this once per BloodHound instance.**
 
 ```bash
-python3 aihound400/register_ai_nodes.py \
+python3 docs/register_ai_nodes.py \
   -s http://localhost:8080 \
   -u admin \
   -p <your-bloodhound-password>
@@ -35,10 +35,23 @@ Registered 14 custom node kinds:
                  cloud  AIService             AI platform or service (OpenAI, Anthropic, AWS, etc.)
                   plug  MCPServer             Model Context Protocol server instance
                   ...
+Saved queries: 29 created, 0 already existed
+
 Done! You can now import AIHound OpenGraph JSON files into BloodHound CE.
 ```
 
-> **Tip:** If you need to re-register (e.g., after a BloodHound reset), add `--reset` to clear old kinds first.
+### Registration script options
+
+| Flag | Description |
+|------|-------------|
+| *(no flags)* | Register node kinds + saved queries (skips if already registered) |
+| `--reset` | Delete all AIHound node kinds and saved queries, then re-register |
+| `--unregister` | Delete all AIHound node kinds and saved queries, then exit |
+| `--no-queries` | Skip importing saved Cypher queries |
+| `--no-verify-ssl` | Disable SSL certificate verification |
+| `--list` | List node kinds that would be registered and exit |
+
+> **Tip:** If you need to re-register (e.g., after a BloodHound reset or AIHound update), use `--reset` to clear old kinds and queries first.
 
 ---
 
@@ -71,10 +84,9 @@ BloodHound OpenGraph JSON written to: aihound-bloodhound.json
 
 1. Open BloodHound CE in your browser (default: `http://localhost:8080`)
 2. Log in with your admin credentials
-3. Click **"Data Collection"** in the left sidebar (upload icon)
-4. Click **"File Ingest"**
-5. Drag and drop `aihound-bloodhound.json` into the upload area (or click to browse)
-6. Wait for the ingest to complete — you'll see a success message
+3. Click **"Quick Upload"** in the left sidebar
+4. Drag and drop `aihound-bloodhound.json` into the upload area (or click to browse)
+5. Wait for the ingest to complete — you'll see a success message
 
 ---
 
@@ -113,7 +125,9 @@ Click any node to see its properties in the right panel:
 
 ## Step 5: Run Cypher Queries
 
-BloodHound CE has a **Cypher query bar** where you can run custom graph queries. Open the Cypher query input (look for the search/query bar — you may need to toggle to Cypher mode).
+If you ran `register_ai_nodes.py` in Step 1, all 29 queries below are already in BloodHound's **Saved Queries** panel. Click the **Saved Queries** button in the Cypher tab, search for "AIHound", and click any query to load and run it.
+
+You can also paste queries directly into the **Cypher query bar** (toggle to Cypher mode in the search bar).
 
 ### Query 1: See Everything (Start Here)
 
@@ -241,13 +255,13 @@ Then upload the new file to BloodHound CE (Step 3). New nodes/edges will be merg
 
 ## All Cypher Queries Reference
 
-The full set of 20+ pre-built queries is in:
+The full set of 29 pre-built queries is in:
 
 ```
-aihound400/cypher_queries.cy
+docs/cypher_queries.cy
 ```
 
-Open that file in any text editor, find the query you want, and paste it into BloodHound's Cypher query bar.
+If you ran `register_ai_nodes.py`, these are already imported into BloodHound's **Saved Queries** panel — search "AIHound" to find them. You can also open the file in any text editor and paste queries into BloodHound's Cypher query bar.
 
 ---
 
@@ -329,7 +343,11 @@ AIService (Perplexity)
 |---------|----------|
 | Nodes show as generic circles | Run `register_ai_nodes.py` again (Step 1) |
 | "No results" on a query | Check spelling — node properties are lowercase |
-| Upload fails | Ensure BloodHound CE is v8.0+ (OpenGraph support required) |
-| Can't find Cypher input | Look for a toggle between "Search" and "Cypher" mode in the query bar |
+| Upload fails | Ensure BloodHound CE is v9.x (OpenGraph support required) |
+| Can't find Cypher input | Look for the "Cypher" tab in the search bar area |
+| Can't find Saved Queries | Click the "Saved Queries" button above the Cypher editor, then search "AIHound" |
 | Graph looks empty | Make sure the scan found credentials: run `python3 -m aihound` first to check |
 | Registration script fails with 401 | Check your BloodHound password or use `--token-id` / `--token-key` instead |
+| Registration fails with 409 | Node kinds already registered — use `--reset` to clear and re-register |
+| Search shows "?" icons for custom nodes | This is a BHCE limitation — custom node icons render correctly in the Cypher graph view but show as `?` in the Search tab dropdown. Use the Cypher tab or Saved Queries instead |
+| "Invalid Node Kind" error in search | Re-run the AIHound scan and re-upload — older exports had colons in node names that conflicted with BHCE's search syntax |

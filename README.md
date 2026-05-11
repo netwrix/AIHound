@@ -98,7 +98,7 @@ python3 -m aihound --json-file report.json
 python3 -m aihound --json | jq '.summary'
 ```
 
-### BloodHound Attack Path Graph (v3.2.0)
+### BloodHound Attack Path Graph
 
 Export to [BloodHound CE](https://github.com/SpecterOps/BloodHound) for interactive attack path visualization — see how credentials chain together across tools, services, and data stores:
 
@@ -106,16 +106,18 @@ Export to [BloodHound CE](https://github.com/SpecterOps/BloodHound) for interact
 python3 -m aihound --bloodhound aihound-bloodhound.json
 ```
 
-Then upload `aihound-bloodhound.json` to BloodHound CE (v8.0+) via **Data Collection > File Ingest**.
+Then upload `aihound-bloodhound.json` to BloodHound CE (v9.x) via **Quick Upload** or **Data Collection > File Ingest**.
 
-**First time?** Register custom node types (once per BloodHound instance):
->register_ai_nodes.py script located in docs folder. 
+**First time?** Register custom node types and saved Cypher queries (once per BloodHound instance):
+>register_ai_nodes.py script located in docs folder.
 
 ```bash
-python3 register_ai_nodes.py -s http://<bloodhound IP>:8080 -u admin -p <password>
+python3 docs/register_ai_nodes.py -s http://<bloodhound IP>:8080 -u admin -p <password>
 ```
 
-Example Cypher queries to run in BloodHound:
+This registers 14 custom node kinds with icons and imports 29 saved Cypher queries into BloodHound's Saved Queries panel. Use `--reset` to re-register, `--unregister` to remove everything, or `--no-queries` to skip query import.
+
+Example Cypher queries (also available in Saved Queries after registration):
 
 ```cypher
 // Show the full credential graph

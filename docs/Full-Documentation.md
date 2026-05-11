@@ -365,7 +365,7 @@ AIHound can export scan results as [BloodHound CE](https://github.com/SpecterOps
 aihound --bloodhound aihound-bloodhound.json    # generate OpenGraph JSON
 ```
 
-Upload the file to BloodHound CE (v8.0+) via **Data Collection > File Ingest** and explore credential relationships as an interactive graph.
+Upload the file to BloodHound CE (v9.x) via **Quick Upload** and explore credential relationships as an interactive graph.
 
 ### What you see in BloodHound
 
@@ -404,11 +404,21 @@ ConfigFile (.credentials.json)
 
 ### Setup
 
-**1. Register custom node types** (once per BloodHound instance):
+**1. Register custom node types and saved queries** (once per BloodHound instance):
 
 ```bash
-python3 register_ai_nodes.py -s http://localhost:8080 -u admin -p <password>
+python3 docs/register_ai_nodes.py -s http://localhost:8080 -u admin -p <password>
 ```
+
+This registers 14 custom node kinds with Font Awesome icons and imports 29 pre-built Cypher queries into BloodHound's **Saved Queries** panel.
+
+| Flag | Description |
+|------|-------------|
+| *(no flags)* | Register node kinds + saved queries (skips if already exist) |
+| `--reset` | Delete all AIHound node kinds and saved queries, then re-register |
+| `--unregister` | Remove all AIHound node kinds and saved queries |
+| `--no-queries` | Skip importing saved Cypher queries |
+| `--no-verify-ssl` | Disable SSL certificate verification |
 
 **2. Run scan and export:**
 
@@ -416,9 +426,9 @@ python3 register_ai_nodes.py -s http://localhost:8080 -u admin -p <password>
 aihound --bloodhound output.json
 ```
 
-**3. Upload** `output.json` to BloodHound CE via Data Collection > File Ingest.
+**3. Upload** `output.json` to BloodHound CE via Quick Upload.
 
-**4. Query attack paths** using the pre-built Cypher queries in `cypher_queries.cy`:
+**4. Query attack paths** — open the **Saved Queries** panel in the Cypher tab and search "AIHound", or paste from `cypher_queries.cy`:
 
 ```cypher
 // Full graph — all AI credential relationships
@@ -443,7 +453,7 @@ WHERE c.credential_type CONTAINS "PERPLEXITY"
 RETURN path
 ```
 
-See `BLOODHOUND_GUIDE.md` for the full step-by-step walkthrough and `cypher_queries.cy` for all 29 pre-built queries.
+See `BLOODHOUND_GUIDE.md` for the full step-by-step walkthrough. All 29 queries from `cypher_queries.cy` are auto-imported into BloodHound's Saved Queries when you run `register_ai_nodes.py`.
 
 ---
 
@@ -458,6 +468,7 @@ All flags are the same across all three versions:
 | `--json` | Output JSON to stdout |
 | `--json-file PATH` | Write JSON report to file (creates parent dirs, expands `~`) |
 | `--html-file PATH` | Write HTML report to file (creates parent dirs, expands `~`) |
+| `--bloodhound PATH` | Write BloodHound CE OpenGraph JSON to file |
 | `--banner PATH` | Custom banner image for HTML report |
 | `--tools TOOL ...` | Only scan specified tools (by slug) |
 | `--list-tools` | List all available scanners |
@@ -869,9 +880,10 @@ aihound/
 │   └── mcp.py           # Shared MCP config parser (used by multiple scanners)
 ├── scanners/            # One file per tool, auto-discovered via @register
 ├── output/
-│   ├── table.py         # CLI table with ANSI colors
-│   ├── json_export.py   # JSON report
-│   └── html_report.py   # Self-contained HTML report with embedded banner
+│   ├── table.py             # CLI table with ANSI colors
+│   ├── json_export.py       # JSON report
+│   ├── html_report.py       # Self-contained HTML report with embedded banner
+│   └── opengraph_export.py  # BloodHound CE OpenGraph JSON export
 └── utils/
     ├── keychain.py      # macOS Keychain queries
     ├── credman.py       # Windows Credential Manager queries

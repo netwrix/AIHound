@@ -1,0 +1,47 @@
+  1. aihound/output/opengraph_export.py — Strip colons from node names to
+  avoid BHCE search parsing issues:
+    - Line 381: "{tool_name}: {cred_type}" → "{tool_name} - {cred_type}"
+    - Line 465: "Network: {addr_port}" → "Network - {addr_port}"
+    - Line 495: "MCP: {mcp_name}" → "MCP - {mcp_name}"
+    - Lines 339-340: Added colon sanitization in _add_node() — replaces :
+  with  - in all node name properties
+  2. docs/register_ai_nodes.py — Fixed API interactions for BHCE 9.x:
+    - Added _request_no_body() for DELETE requests that return empty bodies
+    - Added list_custom_kinds() to fetch registered kinds via GET
+    - Added delete_custom_kind() to delete individual kinds via DELETE
+  /api/v2/custom-nodes/{kind_name}
+    - Rewrote reset_custom_kinds() to list all kinds then delete each one
+  individually
+    - register_kinds() now handles 409 Conflict gracefully
+    - Added --reset flag (delete + re-register)
+    - Added --unregister flag (delete all and exit)
+    - Removed broken bulk DELETE approach
+  3. report.json — Regenerated with the fixed node names (no colons)
+
+
+
+  README.md:
+  - Updated BloodHound section header (removed version tag)
+  - Changed BHCE version reference from v8.0+ to v9.x
+  - Updated upload instructions to "Quick Upload"
+  - Updated register_ai_nodes.py path to docs/
+  - Added mention of saved queries auto-import (29 queries)
+  - Added --reset, --unregister, --no-queries flags
+
+  docs/BLOODHOUND_GUIDE.md:
+  - Updated prerequisites to BHCE v9.x
+  - Renamed Step 1 to "Register Custom Node Types & Saved Queries"
+  - Added registration script options table (--reset, --unregister,
+  --no-queries, etc.)
+  - Updated Step 3 upload instructions to "Quick Upload"
+  - Updated Step 5 to mention Saved Queries panel
+  - Updated Cypher queries reference to mention auto-import
+  - Expanded troubleshooting table with new entries: 409 conflicts, ? icon
+  limitation, "Invalid Node Kind" fix
+
+  docs/Full-Documentation.md:
+  - Updated BHCE version to v9.x and upload method to "Quick Upload"
+  - Added registration script options table
+  - Updated setup section to mention saved queries auto-import
+  - Added opengraph_export.py to project structure
+  - Added --bloodhound flag to CLI reference table

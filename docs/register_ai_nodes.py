@@ -1,28 +1,36 @@
 #!/usr/bin/env python3
-"""Register AIHound custom node kinds and icons in BloodHound CE.
+"""Register AIHound custom node kinds, icons, and saved queries in BloodHound CE.
 
 Run once per BloodHound CE instance to enable custom visualization
 of AI credential nodes with distinct icons and colors.
 
 Usage:
-    # Username/password auth:
+    # Username/password auth (registers node kinds + saved queries):
     python3 register_ai_nodes.py -s http://localhost:8080 -u admin -p <password>
 
     # Token auth:
     python3 register_ai_nodes.py -s http://localhost:8080 --token-id <uuid> --token-key <key>
 
-    # Reset existing custom kinds first:
+    # Reset (delete + re-register node kinds and saved queries):
     python3 register_ai_nodes.py -s http://localhost:8080 -u admin -p <password> --reset
+
+    # Unregister all custom kinds and saved queries:
+    python3 register_ai_nodes.py -s http://localhost:8080 -u admin -p <password> --unregister
+
+    # Skip saved queries:
+    python3 register_ai_nodes.py -s http://localhost:8080 -u admin -p <password> --no-queries
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 import urllib.error
 import urllib.request
 import ssl
+from pathlib import Path
 
 
 # Custom node kinds with Font Awesome icon names and colors.
@@ -160,19 +168,55 @@ class BloodHoundClient:
         except Exception:
             raise RuntimeError("Token authentication failed — check token ID and key")
 
-    def reset_custom_kinds(self) -> None:
-        """Delete all existing custom node kinds."""
+    def _request_no_body(self, method: str, path: str,
+                         data: dict | None = None) -> None:
+        """Make an HTTP request that may return an empty body (e.g. DELETE, PUT)."""
+        url = f"{self.server}{path}"
+        headers = {"Content-Type": "application/json"}
+        if self.token:
+            headers["Authorization"] = f"Bearer {self.token}"
+        body = json.dumps(data).encode() if data else None
+        req = urllib.request.Request(url, data=body, headers=headers, method=method)
+        with urllib.request.urlopen(req, context=self.ssl_ctx) as resp:
+            resp.read()  # drain response
+
+    def list_custom_kinds(self) -> list[str]:
+        """Return the names of all registered custom node kinds."""
+        resp = self._request("GET", "/api/v2/custom-nodes")
+        entries = resp.get("data", [])
+        return [e["kindName"] for e in entries]
+
+    def delete_custom_kind(self, kind_name: str) -> None:
+        """Delete a single custom node kind by name."""
         try:
-            self._request("DELETE", "/api/v2/custom-nodes")
-            print("Cleared existing custom node kinds")
+            self._request_no_body("DELETE", f"/api/v2/custom-nodes/{kind_name}")
         except urllib.error.HTTPError as e:
             if e.code == 404:
-                print("No existing custom kinds to clear")
+                pass  # already gone
             else:
                 raise
 
+    def reset_custom_kinds(self) -> None:
+        """Delete all registered custom node kinds one-by-one.
+
+        BHCE 9.x does not support bulk DELETE on /api/v2/custom-nodes.
+        Instead we list all kinds and delete each via
+        DELETE /api/v2/custom-nodes/{kind_name}.
+        """
+        existing = self.list_custom_kinds()
+        if not existing:
+            print("No custom node kinds to remove")
+            return
+        for name in existing:
+            self.delete_custom_kind(name)
+        print(f"Removed {len(existing)} custom node kinds: {', '.join(existing)}")
+
     def register_kinds(self, kinds: dict[str, dict]) -> None:
-        """Register custom node kinds with icons."""
+        """Register custom node kinds with icons.
+
+        Uses POST for initial creation. If kinds already exist (HTTP 409),
+        treats as success — re-run with --reset first to force re-registration.
+        """
         payload = {"custom_types": {}}
         for kind_name, kind_def in kinds.items():
             payload["custom_types"][kind_name] = {
@@ -183,10 +227,235 @@ class BloodHoundClient:
                 },
             }
 
-        self._request("POST", "/api/v2/custom-nodes", payload)
+        try:
+            self._request("POST", "/api/v2/custom-nodes", payload)
+        except urllib.error.HTTPError as e:
+            if e.code == 409:
+                print("Custom node kinds already registered (use --reset to re-register)")
+            else:
+                raise
         print(f"Registered {len(kinds)} custom node kinds:")
         for name, defn in kinds.items():
             print(f"  {defn['icon']:>20}  {name:<20}  {defn['description']}")
+
+    # ----- OpenGraph Extension (v9.1.0+) -----
+
+    def _has_extension_support(self) -> bool:
+        """Check if the server supports the OpenGraph extensions API (v9.1.0+)."""
+        try:
+            # Enable the feature flag if possible
+            resp = self._request("GET", "/api/v2/features")
+            for feat in resp.get("data", []):
+                if feat.get("key") == "opengraph_extension_management":
+                    if not feat.get("enabled") and feat.get("user_updatable"):
+                        try:
+                            self._request("PUT", f"/api/v2/features/{feat['id']}/toggle")
+                        except Exception:
+                            # Toggle endpoint may return non-JSON — that's OK
+                            pass
+                        print("Enabled opengraph_extension_management feature flag")
+                    elif not feat.get("enabled"):
+                        return False
+                    return True
+        except Exception:
+            pass
+        return False
+
+    def register_extension(self, kinds: dict[str, dict], version: str = "v3.2.1") -> bool:
+        """Register AIHound as an OpenGraph extension with is_display_kind.
+
+        This is the v9.1.0+ registration method that enables proper icon
+        resolution via the extension schema system.
+
+        Returns True if successful, False if not supported.
+        """
+        if not self._has_extension_support():
+            return False
+
+        prefix = "AIHound_"
+
+        node_kinds = [
+            {"name": f"{prefix}Environment", "display_name": "AIHound Environment",
+             "description": "AIHound scan environment", "is_display_kind": False},
+        ]
+        for kind_name, kind_def in kinds.items():
+            node_kinds.append({
+                "name": f"{prefix}{kind_name}",
+                "display_name": kind_def.get("description", kind_name)[:60],
+                "description": kind_def.get("description", ""),
+                "is_display_kind": True,
+                "icon": kind_def["icon"],
+                "color": kind_def["color"],
+            })
+
+        # Collect all edge kinds used by the graph builder
+        edge_kinds = [
+            "Authenticates", "StoredIn", "ContainsCredential", "ReadsFrom",
+            "GrantsAccessTo", "ExposesService", "UsesMCPServer",
+            "RequiresCredential", "ConfiguredBy", "InheritsEnv",
+            "BrowserAuthTo", "DockerRegistryAuth", "GitAuthTo", "SameSecret",
+        ]
+
+        principal_kinds = [f"{prefix}{k}" for k in kinds]
+
+        payload = {
+            "schema": {
+                "name": "AIHound",
+                "display_name": "AIHound",
+                "version": version,
+                "namespace": "AIHound",
+            },
+            "node_kinds": node_kinds,
+            "relationship_kinds": [
+                {"name": f"{prefix}{ek}", "description": ek, "is_traversable": True}
+                for ek in edge_kinds
+            ],
+            "environments": [{
+                "environment_kind": f"{prefix}Environment",
+                "source_kind": "AIHound",
+                "principal_kinds": principal_kinds,
+            }],
+        }
+
+        try:
+            self._request_no_body("PUT", "/api/v2/extensions", payload)
+            print(f"Registered AIHound OpenGraph extension (v9.1.0+ mode):")
+            for nk in node_kinds:
+                if nk.get("is_display_kind"):
+                    print(f"  {nk.get('icon', ''):>20}  {nk['name']:<30}  {nk['display_name']}")
+            return True
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                return False  # endpoint not available
+            raise
+
+    # ----- Saved Queries -----
+
+    def list_saved_queries(self) -> list[dict]:
+        """Return all saved queries."""
+        resp = self._request("GET", "/api/v2/saved-queries")
+        return resp.get("data", [])
+
+    def create_saved_query(self, name: str, query: str) -> None:
+        """Create a single saved query."""
+        self._request("POST", "/api/v2/saved-queries", {
+            "name": name,
+            "query": query,
+        })
+
+    def delete_saved_query(self, query_id: int) -> None:
+        """Delete a saved query by ID."""
+        try:
+            self._request_no_body("DELETE", f"/api/v2/saved-queries/{query_id}")
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                pass
+            else:
+                raise
+
+    def reset_saved_queries(self) -> None:
+        """Delete all AIHound saved queries (those prefixed with 'AIHound')."""
+        existing = self.list_saved_queries()
+        removed = 0
+        for q in existing:
+            if q.get("name", "").startswith("AIHound"):
+                self.delete_saved_query(q["id"])
+                removed += 1
+        if removed:
+            print(f"Removed {removed} AIHound saved queries")
+        else:
+            print("No AIHound saved queries to remove")
+
+    def register_saved_queries(self, queries: list[tuple[str, str]]) -> None:
+        """Register saved queries, skipping any that already exist by name."""
+        existing_names = {q["name"] for q in self.list_saved_queries()}
+        created = 0
+        skipped = 0
+        for name, query in queries:
+            if name in existing_names:
+                skipped += 1
+                continue
+            self.create_saved_query(name, query)
+            created += 1
+        print(f"Saved queries: {created} created, {skipped} already existed")
+
+
+def parse_cypher_file(filepath: str) -> list[tuple[str, str]]:
+    """Parse a .cy file into (name, query) pairs.
+
+    Format: lines starting with // before a query block are treated as
+    comments. The last non-section comment before a query becomes its name.
+    Section headers (// ---...) and their titles are used to group queries.
+    """
+    queries: list[tuple[str, str]] = []
+    lines = Path(filepath).read_text(encoding="utf-8").splitlines()
+
+    section = ""
+    comment = ""
+    query_lines: list[str] = []
+
+    def _flush() -> None:
+        nonlocal comment, query_lines
+        if query_lines:
+            query = "\n".join(query_lines).strip()
+            if query:
+                name = f"AIHound - {section} - {comment}" if comment else f"AIHound - {section}"
+                # Deduplicate names by appending a suffix if needed
+                base_name = name
+                counter = 2
+                existing_names = {n for n, _ in queries}
+                while name in existing_names:
+                    name = f"{base_name} ({counter})"
+                    counter += 1
+                queries.append((name, query))
+        query_lines.clear()
+        comment = ""
+
+    for line in lines:
+        stripped = line.strip()
+
+        # Section header: // ----...
+        if stripped.startswith("// ---"):
+            _flush()
+            continue
+
+        # Section title: // N. TITLE
+        m = re.match(r"^//\s*\d+\.\s+(.+)", stripped)
+        if m:
+            _flush()
+            section = m.group(1).split("—")[0].split("–")[0].strip()
+            continue
+
+        # Top-level header or instruction comments — skip
+        if stripped.startswith("// ===") or stripped.startswith("// Import") or stripped.startswith("// IMPORTANT"):
+            _flush()
+            continue
+
+        # Table section header
+        if stripped.startswith("// TABLE QUERIES") or stripped.startswith("// ="):
+            _flush()
+            section = "Table Queries"
+            continue
+
+        # Regular comment before a query → candidate name
+        if stripped.startswith("//"):
+            if not query_lines:
+                # Use the comment text (strip leading //)
+                c = stripped.lstrip("/").strip()
+                if c and not c.startswith("NOTE"):
+                    comment = c
+            continue
+
+        # Empty line
+        if not stripped:
+            _flush()
+            continue
+
+        # Cypher line
+        query_lines.append(stripped)
+
+    _flush()
+    return queries
 
 
 def main() -> int:
@@ -203,6 +472,10 @@ def main() -> int:
     parser.add_argument("--token-key", help="API token key (base64)")
     parser.add_argument("--reset", action="store_true",
                         help="Delete all existing custom node kinds before registering")
+    parser.add_argument("--unregister", action="store_true",
+                        help="Delete all AIHound custom node kinds and saved queries, then exit")
+    parser.add_argument("--no-queries", action="store_true",
+                        help="Skip registering saved Cypher queries")
     parser.add_argument("--no-verify-ssl", action="store_true",
                         help="Disable SSL certificate verification")
     parser.add_argument("--list", action="store_true",
@@ -232,12 +505,39 @@ def main() -> int:
         else:
             client.login_token(args.token_id, args.token_key)
 
-        # Reset if requested
+        # Unregister only
+        if args.unregister:
+            client.reset_custom_kinds()
+            client.reset_saved_queries()
+            print("\nDone! All AIHound custom node kinds and saved queries have been removed.")
+            return 0
+
+        # Reset if requested (delete then re-create)
         if args.reset:
             client.reset_custom_kinds()
+            if not args.no_queries:
+                client.reset_saved_queries()
 
-        # Register kinds
-        client.register_kinds(AI_NODE_KINDS)
+        # Register kinds via v9.1.0+ extension API (is_display_kind).
+        # Also register custom-nodes with prefixed names as a fallback
+        # for pre-9.1.0 icon resolution.
+        client.register_extension(AI_NODE_KINDS)
+
+        # Register prefixed custom-nodes for pre-9.1.0 frontend icon matching
+        prefixed_kinds = {
+            f"AIHound_{name}": defn for name, defn in AI_NODE_KINDS.items()
+        }
+        client.register_kinds(prefixed_kinds)
+
+        # Register saved queries from cypher_queries.cy
+        if not args.no_queries:
+            cy_file = Path(__file__).resolve().parent / "cypher_queries.cy"
+            if cy_file.exists():
+                queries = parse_cypher_file(str(cy_file))
+                client.register_saved_queries(queries)
+            else:
+                print(f"Skipping saved queries — {cy_file} not found")
+
         print("\nDone! You can now import AIHound OpenGraph JSON files into BloodHound CE.")
 
     except Exception as e:
