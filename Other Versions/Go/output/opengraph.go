@@ -13,7 +13,15 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// OpenGraph JSON types (BloodHound CE v8.0+)
+// BloodHound CE namespace prefix
+// ---------------------------------------------------------------------------
+// BH CE v9.1.0+ resolves custom node icons via OpenGraph extension schemas
+// which require namespace-prefixed kind names.  The prefix must match the
+// namespace registered via PUT /api/v2/extensions.
+const bhKindPrefix = "AIHound_"
+
+// ---------------------------------------------------------------------------
+// OpenGraph JSON types (BloodHound CE v9.x)
 // ---------------------------------------------------------------------------
 
 type openGraphDoc struct {
@@ -332,7 +340,17 @@ func (b *openGraphBuilder) addNode(id string, kinds []string, props map[string]a
 		}
 		safe[key] = v
 	}
-	b.nodes[id] = openGraphNode{ID: id, Kinds: kinds, Properties: safe}
+	// BloodHound CE search parses "X:Y" as kind:query, so strip
+	// colons from the name property to avoid "Invalid Node Kind" errors.
+	if name, ok := safe["name"].(string); ok {
+		safe["name"] = strings.ReplaceAll(name, ":", " -")
+	}
+	// Prefix kinds with namespace for BH CE v9.1.0+ extension schema
+	prefixedKinds := make([]string, len(kinds))
+	for i, k := range kinds {
+		prefixedKinds[i] = bhKindPrefix + k
+	}
+	b.nodes[id] = openGraphNode{ID: id, Kinds: prefixedKinds, Properties: safe}
 }
 
 func (b *openGraphBuilder) addEdge(startID, endID, kind string, props map[string]any) {
@@ -350,7 +368,7 @@ func (b *openGraphBuilder) addEdge(startID, endID, kind string, props map[string
 	edge := openGraphEdge{
 		Start: openGraphEndpoint{MatchBy: "id", Value: startID},
 		End:   openGraphEndpoint{MatchBy: "id", Value: endID},
-		Kind:  kind,
+		Kind:  bhKindPrefix + kind,
 	}
 	if len(props) > 0 {
 		safe := make(map[string]any, len(props))
@@ -382,7 +400,7 @@ func (b *openGraphBuilder) processFinding(f core.CredentialFinding) {
 	// --- AICredential node ---
 	credID := nodeID("aicred", f.ToolName, f.CredentialType, f.Location)
 	credProps := map[string]any{
-		"name":            f.ToolName + ": " + f.CredentialType,
+		"name":            f.ToolName + " - " + f.CredentialType,
 		"tool":            f.ToolName,
 		"credential_type": f.CredentialType,
 		"risk_level":      f.RiskLevel.String(),
@@ -458,7 +476,7 @@ func (b *openGraphBuilder) processFinding(f core.CredentialFinding) {
 			addrPort = f.Location
 		}
 		b.addNode(netID, []string{"NetworkEndpoint"}, map[string]any{
-			"name": "Network: " + addrPort, "address": addrPort, "risk_level": f.RiskLevel.String(),
+			"name": "Network - " + addrPort, "address": addrPort, "risk_level": f.RiskLevel.String(),
 		})
 		if netSvc := inferNetworkService(f); netSvc != "" {
 			svcID := nodeID("svc", netSvc)
@@ -483,7 +501,7 @@ func (b *openGraphBuilder) processFinding(f core.CredentialFinding) {
 		configPath := loc
 		mcpID := nodeID("mcp", mcpName, configPath)
 		b.addNode(mcpID, []string{"MCPServer"}, map[string]any{
-			"name": "MCP: " + mcpName, "server_name": mcpName, "config_path": configPath,
+			"name": "MCP - " + mcpName, "server_name": mcpName, "config_path": configPath,
 		})
 		b.addEdge(toolID, mcpID, "UsesMCPServer", nil)
 		b.addEdge(mcpID, credID, "RequiresCredential", nil)
@@ -523,7 +541,7 @@ func (b *openGraphBuilder) detectSameSecrets() {
 	}
 	var creds []credInfo
 	for id, node := range b.nodes {
-		if len(node.Kinds) == 0 || node.Kinds[0] != "AICredential" {
+		if len(node.Kinds) == 0 || node.Kinds[0] != bhKindPrefix+"AICredential" {
 			continue
 		}
 		preview, _ := node.Properties["value_preview"].(string)
