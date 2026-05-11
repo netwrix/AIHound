@@ -23,6 +23,15 @@ from aihound.core.redactor import KNOWN_PREFIXES
 
 
 # ---------------------------------------------------------------------------
+# BloodHound CE namespace prefix
+# ---------------------------------------------------------------------------
+# BH CE v9.1.0+ resolves custom node icons via OpenGraph extension schemas
+# which require namespace-prefixed kind names.  The prefix must match the
+# namespace registered via PUT /api/v2/extensions.
+BH_KIND_PREFIX = "AIHound_"
+
+
+# ---------------------------------------------------------------------------
 # Service inference mappings
 # ---------------------------------------------------------------------------
 
@@ -334,9 +343,15 @@ class OpenGraphBuilder:
                     safe_props[key] = v.isoformat()
                 else:
                     safe_props[key] = str(v)
+            # BloodHound CE search parses "X:Y" as kind:query, so strip
+            # colons from the name property to avoid "Invalid Node Kind" errors.
+            if "name" in safe_props and isinstance(safe_props["name"], str):
+                safe_props["name"] = safe_props["name"].replace(":", " -")
+            # Prefix kinds with namespace for BH CE v9.1.0+ extension schema
+            prefixed_kinds = [BH_KIND_PREFIX + k for k in kinds]
             self._nodes[node_id] = {
                 "id": node_id,
-                "kinds": kinds,
+                "kinds": prefixed_kinds,
                 "properties": safe_props,
             }
 
@@ -353,7 +368,7 @@ class OpenGraphBuilder:
         edge = {
             "start": {"match_by": "id", "value": start_id},
             "end": {"match_by": "id", "value": end_id},
-            "kind": kind,
+            "kind": BH_KIND_PREFIX + kind,
         }
         if properties:
             safe_props = {
@@ -378,7 +393,7 @@ class OpenGraphBuilder:
 
         # --- AICredential node ---
         cred_id = _node_id("aicred", finding.tool_name, finding.credential_type, finding.location)
-        cred_name = f"{finding.tool_name}: {finding.credential_type}"
+        cred_name = f"{finding.tool_name} - {finding.credential_type}"
         cred_props = {
             "name": cred_name,
             "tool": finding.tool_name,
@@ -462,7 +477,7 @@ class OpenGraphBuilder:
             # Parse address:port from value_preview
             addr_port = finding.value_preview or finding.location
             self._add_node(net_id, ["NetworkEndpoint"], {
-                "name": f"Network: {addr_port}",
+                "name": f"Network - {addr_port}",
                 "address": addr_port,
                 "risk_level": finding.risk_level.value,
             })
@@ -492,7 +507,7 @@ class OpenGraphBuilder:
             config_path = finding.location.split(":")[0] if ":" in finding.location else finding.location
             mcp_id = _node_id("mcp", mcp_name, config_path)
             self._add_node(mcp_id, ["MCPServer"], {
-                "name": f"MCP: {mcp_name}",
+                "name": f"MCP - {mcp_name}",
                 "server_name": mcp_name,
                 "config_path": config_path,
             })
