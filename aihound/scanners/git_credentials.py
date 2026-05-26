@@ -154,8 +154,9 @@ class GitCredentialsScanner(BaseScanner):
         mtime = get_file_mtime(path)
         storage = StorageType.PLAINTEXT_INI
 
-        # Git config uses INI-like syntax. Use configparser with strict=False.
-        config = configparser.ConfigParser(strict=False)
+        # Git config uses INI-like syntax. Disable interpolation so that git
+        # format strings like %f, %H, etc. don't trigger a syntax error.
+        config = configparser.ConfigParser(strict=False, interpolation=None)
         try:
             config.read(str(path), encoding="utf-8")
         except (configparser.Error, OSError) as e:
