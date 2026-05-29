@@ -32,8 +32,8 @@ AIHound can be run four ways: from Python source, using the Go runtime. as a com
 ## Step 1: Get AIHound
 
 ```bash
-git clone https://github.com/netwrix/aihound.git
-cd aihound
+git clone https://github.com/netwrix/AIHound.git
+cd AIHound
 ```
 
 ## Step 2: Run Your First Scan
