@@ -140,6 +140,8 @@ RETURN path
 
 See `BLOODHOUND_GUIDE.md` located [Here](https://github.com/netwrix/AIHound/tree/main/docs) for the full walkthrough and `cypher_queries.cy` for all 29 pre-built queries.
 
+<img width="1768" height="937" alt="Screenshot 2026-05-12 135945" src="https://github.com/user-attachments/assets/72d00b53-662b-40a4-be8d-cd95be86eee7" />
+
 ### All at once
 
 ```bash
