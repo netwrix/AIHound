@@ -19,7 +19,7 @@
 <!-- [![GitHub stars](https://img.shields.io/github/stars/netwrix/AIHound?style=flat-square)](https://github.com/netwrix/AIHound/stargazers)
 [![GitHub forks](https://img.shields.io/github/forks/netwrix/AIHound?style=flat-square)](https://github.com/netwrix/AIHound/network/members)
 [![Last Commit](https://img.shields.io/github/last-commit/netwrix/AIHound?style=flat-square)](https://github.com/netwrix/AIHound/commits/main) -->
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](https://github.com/netwrix/AIHound/pulls)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](CONTRIBUTING.md)
 
 **29 AI tool scanners · 4 platforms · BloodHound attack path export · MCP server mode · Watch mode**
 
