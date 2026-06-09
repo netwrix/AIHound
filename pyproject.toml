@@ -12,7 +12,28 @@ license = "MIT"
 authors = [
     {name = "Darryl Baker"},
 ]
-keywords = ["security", "credentials", "ai", "llm", "mcp", "aihound"]
+keywords = ["security", "credentials", "ai", "llm", "mcp", "aihound", "secrets-scanner", "ai-security", "bloodhound", "offensive-security"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Information Technology",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Security",
+    "Topic :: System :: Systems Administration",
+]
+
+[project.urls]
+Homepage = "https://github.com/netwrix/AIHound"
+Documentation = "https://github.com/netwrix/AIHound/tree/main/docs"
+Repository = "https://github.com/netwrix/AIHound"
+Issues = "https://github.com/netwrix/AIHound/issues"
 
 [project.optional-dependencies]
 pretty = ["rich>=13.0"]
