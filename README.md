@@ -10,15 +10,15 @@
 
 [![License](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square&logo=python&logoColor=white)](#prerequisites)
-[![Version](https://img.shields.io/badge/version-3.2.1-green?style=flat-square)](#)
+[![Version](https://img.shields.io/badge/version-3.2.2-green?style=flat-square)](#)
 [![Scanners](https://img.shields.io/badge/AI_tool_scanners-29-brightgreen?style=flat-square)](#step-5-scan-specific-tools)
 [![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20WSL-blueviolet?style=flat-square)](#wsl-users)
 [![Outputs](https://img.shields.io/badge/outputs-HTML%20%7C%20JSON%20%7C%20BloodHound-orange?style=flat-square)](#step-4-generate-reports)
 [![BloodHound](https://img.shields.io/badge/BloodHound_CE-compatible-red?style=flat-square)](#bloodhound-attack-path-graph)
 [![MCP Server](https://img.shields.io/badge/MCP_Server-enabled-9cf?style=flat-square)](docs/Full-Documentation.md)
-[![GitHub stars](https://img.shields.io/github/stars/netwrix/AIHound?style=flat-square)](https://github.com/netwrix/AIHound/stargazers)
+<!-- [![GitHub stars](https://img.shields.io/github/stars/netwrix/AIHound?style=flat-square)](https://github.com/netwrix/AIHound/stargazers)
 [![GitHub forks](https://img.shields.io/github/forks/netwrix/AIHound?style=flat-square)](https://github.com/netwrix/AIHound/network/members)
-[![Last Commit](https://img.shields.io/github/last-commit/netwrix/AIHound?style=flat-square)](https://github.com/netwrix/AIHound/commits/main)
+[![Last Commit](https://img.shields.io/github/last-commit/netwrix/AIHound?style=flat-square)](https://github.com/netwrix/AIHound/commits/main) -->
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](https://github.com/netwrix/AIHound/pulls)
 
 **29 AI tool scanners · 4 platforms · BloodHound attack path export · MCP server mode · Watch mode**
