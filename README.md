@@ -10,7 +10,7 @@
 
 [![License](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square&logo=python&logoColor=white)](#prerequisites)
-[![Version](https://img.shields.io/badge/version-3.2.2-green?style=flat-square)](#)
+[![PyPI](https://img.shields.io/pypi/v/aihound?style=flat-square&logo=pypi&logoColor=white)](https://pypi.org/project/aihound/)
 [![Scanners](https://img.shields.io/badge/AI_tool_scanners-29-brightgreen?style=flat-square)](#step-5-scan-specific-tools)
 [![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20WSL-blueviolet?style=flat-square)](#wsl-users)
 [![Outputs](https://img.shields.io/badge/outputs-HTML%20%7C%20JSON%20%7C%20BloodHound-orange?style=flat-square)](#step-4-generate-reports)
@@ -52,6 +52,15 @@ AIHound can be run four ways: from Python source, using the Go runtime. as a com
 - That's it. No pip install required for basic scanning.
 
 ## Step 1: Get AIHound
+
+### Option A: pip install
+
+```bash
+pip install aihound
+aihound
+```
+
+### Option B: Clone from source
 
 ```bash
 git clone https://github.com/netwrix/AIHound.git
