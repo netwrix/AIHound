@@ -1,19 +1,41 @@
-# AIHound Quick Start Guide
+<div align="center">
 
-**AI Credential & Secrets Scanner**
+# AIHound
 
-<p align="center">
+### AI Credential & Secrets Scanner
+
+<p>
   <img src="aihound.png" alt="AIHound" width="500">
 </p>
 
+[![License](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square&logo=python&logoColor=white)](#prerequisites)
+[![Version](https://img.shields.io/badge/version-3.2.1-green?style=flat-square)](#)
+[![Scanners](https://img.shields.io/badge/AI_tool_scanners-29-brightgreen?style=flat-square)](#step-5-scan-specific-tools)
+[![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20WSL-blueviolet?style=flat-square)](#wsl-users)
+[![Outputs](https://img.shields.io/badge/outputs-HTML%20%7C%20JSON%20%7C%20BloodHound-orange?style=flat-square)](#step-4-generate-reports)
+[![BloodHound](https://img.shields.io/badge/BloodHound_CE-compatible-red?style=flat-square)](#bloodhound-attack-path-graph)
+[![MCP Server](https://img.shields.io/badge/MCP_Server-enabled-9cf?style=flat-square)](docs/Full-Documentation.md)
+[![GitHub stars](https://img.shields.io/github/stars/netwrix/AIHound?style=flat-square)](https://github.com/netwrix/AIHound/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/netwrix/AIHound?style=flat-square)](https://github.com/netwrix/AIHound/network/members)
+[![Last Commit](https://img.shields.io/github/last-commit/netwrix/AIHound?style=flat-square)](https://github.com/netwrix/AIHound/commits/main)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](https://github.com/netwrix/AIHound/pulls)
+
+**29 AI tool scanners · 4 platforms · BloodHound attack path export · MCP server mode · Watch mode**
+
+[Get Started](#step-1-get-aihound) · [Reports](#step-4-generate-reports) · [BloodHound](#bloodhound-attack-path-graph) · [Scan Tools](#step-5-scan-specific-tools) · [Documentation](https://github.com/netwrix/AIHound/tree/main/docs)
+
+</div>
+
+---
+
 AIHound is an AI Assistant credential and secrets scanner that detects exposed API keys, OAuth tokens, MCP server secrets, and session credentials across 29 AI tools on Windows, macOS, Linux, and WSL. Beyond one-shot scanning with terminal, it offers a watch mode for continuous monitoring that alerts on new, changed, or escalated credentials in real time.
 
-  AIHound includes an MCP server mode that lets AI assistants like Claude Code scan for and remediate credential issues programmatically. 
-  
-  AIHound can export to **SpectorOps' BloodHound**. Scan results export as OpenGraph JSON that can be ingested into BloodHound to visualize attack paths, showing compromised credential chains through MCP servers, AI services, and datastores. I've included 29 pre-built Cypher queries for blast radius analysis, same-secret detection, and lateral movement mapping. 
+AIHound includes an MCP server mode that lets AI assistants like Claude Code scan for and remediate credential issues programmatically.
 
+AIHound can export to **SpectorOps' BloodHound**. Scan results export as OpenGraph JSON that can be ingested into BloodHound to visualize attack paths, showing compromised credential chains through MCP servers, AI services, and datastores. I've included 29 pre-built Cypher queries for blast radius analysis, same-secret detection, and lateral movement mapping.
 
->This is a security research tool. Credentials are **redacted by default** so output is safe to share in reports and screenshots.
+> This is a security research tool. Credentials are **redacted by default** so output is safe to share in reports and screenshots.
 
 Get scanning in under 2 minutes.
 
