@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import sys
 from pathlib import Path
@@ -169,6 +170,58 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    # BloodHound query import
+    bh_group = parser.add_argument_group(
+        "bloodhound query import",
+        "Import saved Cypher queries into a BloodHound CE instance"
+    )
+    bh_group.add_argument(
+        "--import-queries",
+        action="store_true",
+        help="Import AIHound saved queries into BloodHound CE and exit",
+    )
+    bh_group.add_argument(
+        "--bloodhound-server",
+        type=str,
+        metavar="URL",
+        help="BloodHound CE server URL (e.g., http://localhost:8080)",
+    )
+    bh_group.add_argument(
+        "--bloodhound-user",
+        type=str,
+        metavar="USER",
+        help="BloodHound username",
+    )
+    bh_group.add_argument(
+        "--bloodhound-password",
+        type=str,
+        metavar="PASS",
+        help="BloodHound password",
+    )
+    bh_group.add_argument(
+        "--bloodhound-token-id",
+        type=str,
+        metavar="UUID",
+        help="BloodHound API token ID",
+    )
+    bh_group.add_argument(
+        "--bloodhound-token-key",
+        type=str,
+        metavar="KEY",
+        help="BloodHound API token key",
+    )
+    bh_group.add_argument(
+        "--queries-file",
+        type=str,
+        metavar="PATH",
+        help="Custom queries JSON file (default: bundled extension/queries.json)",
+    )
+    bh_group.add_argument(
+        "--no-verify-ssl",
+        action="store_true",
+        help="Disable SSL certificate verification for BloodHound connection",
+    )
+
     return parser
 
 
@@ -180,6 +233,10 @@ def main(argv: list[str] | None = None) -> int:
     # Logs go to stderr so stdout stays clean for JSON-RPC.
     if args.mcp:
         return _run_mcp_mode(verbose=args.verbose)
+
+    # --import-queries: import saved queries into BloodHound CE, then exit
+    if args.import_queries:
+        return _run_import_queries(args)
 
     _setup_logging(verbose=args.verbose, json_output=args.json_output)
 
@@ -305,6 +362,64 @@ def main(argv: list[str] | None = None) -> int:
         logger.info("BloodHound OpenGraph JSON written to: %s", out_path)
         if not args.json_output:
             print(f"BloodHound OpenGraph JSON written to: {out_path}")
+
+    return 0
+
+
+def _run_import_queries(args: argparse.Namespace) -> int:
+    """Import AIHound saved queries into a BloodHound CE instance."""
+    if not args.bloodhound_server:
+        print(
+            "ERROR: --import-queries requires --bloodhound-server",
+            file=sys.stderr,
+        )
+        return 1
+
+    has_password = args.bloodhound_user and args.bloodhound_password
+    has_token = args.bloodhound_token_id and args.bloodhound_token_key
+    if not has_password and not has_token:
+        print(
+            "ERROR: Provide either --bloodhound-user/--bloodhound-password "
+            "or --bloodhound-token-id/--bloodhound-token-key",
+            file=sys.stderr,
+        )
+        return 1
+
+    from aihound.bloodhound import BloodHoundClient, load_queries, load_schema
+
+    try:
+        queries = load_queries(args.queries_file)
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"ERROR: Failed to load queries: {e}", file=sys.stderr)
+        return 1
+
+    try:
+        schema = load_schema()
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"ERROR: Failed to load schema: {e}", file=sys.stderr)
+        return 1
+
+    client = BloodHoundClient(
+        args.bloodhound_server,
+        verify_ssl=not args.no_verify_ssl,
+    )
+
+    try:
+        if has_password:
+            client.login_password(args.bloodhound_user, args.bloodhound_password)
+        else:
+            client.login_token(args.bloodhound_token_id, args.bloodhound_token_key)
+
+        # Register extension schema (node kinds with icons/colors)
+        client.register_schema(schema)
+        print("Registered AIHound extension schema (node kinds, icons, colors)")
+
+        # Import saved queries
+        created, skipped = client.import_queries(queries)
+        print(f"Saved queries: {created} created, {skipped} already existed")
+    except (RuntimeError, OSError) as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        return 1
 
     return 0
 
