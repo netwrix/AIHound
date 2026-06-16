@@ -1,0 +1,292 @@
+[
+  {
+    "name": "AIHound - Full Graph - All nodes and edges",
+    "queryType": "opengraph",
+    "category": "AIHound",
+    "description": "All AIHound nodes and edges — best for screenshots. START HERE.",
+    "query": "MATCH path = (a:AIHound)-[r]->(b:AIHound)\nRETURN path",
+    "revision": 1,
+    "resources": ["https://github.com/netwrix/AIHound"],
+    "acknowledgements": ["AIHound"]
+  },
+  {
+    "name": "AIHound - Blast Radius - Critical credentials (up to 4 hops)",
+    "queryType": "opengraph",
+    "category": "AIHound",
+    "description": "All nodes reachable from critical credentials (up to 4 hops). Shows what's exposed if a critical credential leaks.",
+    "query": "MATCH path = (c:AIHound_AICredential)-[*1..4]->(target)\nWHERE c.risk_level = \"critical\"\nRETURN path",
+    "revision": 1,
+    "resources": ["https://github.com/netwrix/AIHound"],
+    "acknowledgements": ["AIHound"]
+  },
+  {
+    "name": "AIHound - Blast Radius - From a specific file",
+    "queryType": "opengraph",
+    "category": "AIHound",
+    "description": "Blast radius from a specific config file (edit the CONTAINS filter to match your file).",
+    "query": "MATCH path = (f:AIHound_ConfigFile)-[:AIHound_ContainsCredential]->(c:AIHound_AICredential)-[*1..3]->(target)\nWHERE f.path CONTAINS \".credentials.json\"\nRETURN path",
+    "revision": 1,
+    "resources": ["https://github.com/netwrix/AIHound"],
+    "acknowledgements": ["AIHound"]
+  },
+  {
+    "name": "AIHound - Credential Chain - Credentials to services to data stores",
+    "queryType": "opengraph",
+    "category": "AIHound",
+    "description": "Full attack chain from credentials through services to data stores.",
+    "query": "MATCH path = (c:AIHound_AICredential)-[:AIHound_Authenticates]->(s:AIHound_AIService)-[:AIHound_GrantsAccessTo]->(d:AIHound_DataStore)\nRETURN path",
+    "revision": 1,
+    "resources": ["https://github.com/netwrix/AIHound"],
+    "acknowledgements": ["AIHound"]
+  },
+  {
+    "name": "AIHound - Credential Chain - Critical and high risk credentials with services",
+    "queryType": "opengraph",
+    "category": "AIHound",
+    "description": "Critical and high risk credentials with their authenticated services.",
+    "query": "MATCH path = (c:AIHound_AICredential)-[:AIHound_Authenticates]->(s:AIHound_AIService)\nWHERE c.risk_level = \"critical\" OR c.risk_level = \"high\"\nRETURN path",
+    "revision": 1,
+    "resources": ["https://github.com/netwrix/AIHound"],
+    "acknowledgements": ["AIHound"]
+  },
+  {
+    "name": "AIHound - Credential Chain - All credentials and their services",
+    "queryType": "opengraph",
+    "category": "AIHound",
+    "description": "All credentials and the services they authenticate to.",
+    "query": "MATCH path = (c:AIHound_AICredential)-[:AIHound_Authenticates]->(s:AIHound_AIService)\nRETURN path",
+    "revision": 1,
+    "resources": ["https://github.com/netwrix/AIHound"],
+    "acknowledgements": ["AIHound"]
+  },
+  {
+    "name": "AIHound - File Compromise - .credentials.json contents to services",
+    "queryType": "opengraph",
+    "category": "AIHound",
+    "description": "What services are exposed if .credentials.json is compromised.",
+    "query": "MATCH path = (f:AIHound_ConfigFile)-[:AIHound_ContainsCredential]->(c:AIHound_AICredential)-[:AIHound_Authenticates]->(s:AIHound_AIService)\nWHERE f.path CONTAINS \".credentials.json\"\nRETURN path",
+    "revision": 1,
+    "resources": ["https://github.com/netwrix/AIHound"],
+    "acknowledgements": ["AIHound"]
+  },
+  {
+    "name": "AIHound - File Compromise - .claude.json contents to services",
+    "queryType": "opengraph",
+    "category": "AIHound",
+    "description": "What services are exposed if .claude.json is compromised.",
+    "query": "MATCH path = (f:AIHound_ConfigFile)-[:AIHound_ContainsCredential]->(c:AIHound_AICredential)-[:AIHound_Authenticates]->(s:AIHound_AIService)\nWHERE f.path CONTAINS \".claude.json\"\nRETURN path",
+    "revision": 1,
+    "resources": ["https://github.com/netwrix/AIHound"],
+    "acknowledgements": ["AIHound"]
+  },
+  {
+    "name": "AIHound - File Compromise - Tool to file to credential to service chain",
+    "queryType": "opengraph",
+    "category": "AIHound",
+    "description": "Full read chain: which tools read which files, what credentials are in them, and what services they unlock.",
+    "query": "MATCH path = (t:AIHound_AITool)-[:AIHound_ReadsFrom]->(f:AIHound_ConfigFile)-[:AIHound_ContainsCredential]->(c:AIHound_AICredential)-[:AIHound_Authenticates]->(s:AIHound_AIService)\nRETURN path",
+    "revision": 1,
+    "resources": ["https://github.com/netwrix/AIHound"],
+    "acknowledgements": ["AIHound"]
+  },
+  {
+    "name": "AIHound - Overly Permissive Files - Critical credentials and their files",
+    "queryType": "opengraph",
+    "category": "AIHound",
+    "description": "Critical credentials and the files they're stored in.",
+    "query": "MATCH path = (c:AIHound_AICredential)-[:AIHound_StoredIn]->(f:AIHound_ConfigFile)\nWHERE c.risk_level = \"critical\"\nRETURN path",
+    "revision": 1,
+    "resources": ["https://github.com/netwrix/AIHound"],
+    "acknowledgements": ["AIHound"]
+  },
+  {
+    "name": "AIHound - Overly Permissive Files - Non-0600 permissions",
+    "queryType": "opengraph",
+    "category": "AIHound",
+    "description": "Credentials stored in files with permissions other than 0600 (owner-only read/write).",
+    "query": "MATCH path = (c:AIHound_AICredential)-[:AIHound_StoredIn]->(f:AIHound_ConfigFile)\nWHERE c.file_permissions IS NOT NULL AND NOT c.file_permissions = \"0600\"\nRETURN path",
+    "revision": 1,
+    "resources": ["https://github.com/netwrix/AIHound"],
+    "acknowledgements": ["AIHound"]
+  },
+  {
+    "name": "AIHound - MCP Server Attack Chains - Tool to MCP to credential",
+    "queryType": "opengraph",
+    "category": "AIHound",
+    "description": "MCP server chain: which tools use which MCP servers and what credentials those servers need.",
+    "query": "MATCH path = (t:AIHound_AITool)-[:AIHound_UsesMCPServer]->(m:AIHound_MCPServer)-[:AIHound_RequiresCredential]->(c:AIHound_AICredential)\nRETURN path",
+    "revision": 1,
+    "resources": ["https://github.com/netwrix/AIHound"],
+    "acknowledgements": ["AIHound"]
+  },
+  {
+    "name": "AIHound - MCP Server Attack Chains - Extended chain through to services",
+    "queryType": "opengraph",
+    "category": "AIHound",
+    "description": "Extended MCP chain: tool → MCP server → credential → service.",
+    "query": "MATCH path = (t:AIHound_AITool)-[:AIHound_UsesMCPServer]->(m:AIHound_MCPServer)-[:AIHound_RequiresCredential]->(c:AIHound_AICredential)-[:AIHound_Authenticates]->(s:AIHound_AIService)\nRETURN path",
+    "revision": 1,
+    "resources": ["https://github.com/netwrix/AIHound"],
+    "acknowledgements": ["AIHound"]
+  },
+  {
+    "name": "AIHound - Same Secret Sprawl - Credentials linked by SameSecret",
+    "queryType": "opengraph",
+    "category": "AIHound",
+    "description": "Credentials that share the same secret value (same key in multiple places).",
+    "query": "MATCH path = (c1:AIHound_AICredential)-[:AIHound_SameSecret]->(c2:AIHound_AICredential)\nRETURN path",
+    "revision": 1,
+    "resources": ["https://github.com/netwrix/AIHound"],
+    "acknowledgements": ["AIHound"]
+  },
+  {
+    "name": "AIHound - Same Secret Sprawl - With storage locations",
+    "queryType": "opengraph",
+    "category": "AIHound",
+    "description": "Same secret sprawl with the files where each copy is stored.",
+    "query": "MATCH path1 = (c1:AIHound_AICredential)-[:AIHound_SameSecret]->(c2:AIHound_AICredential),\n      path2 = (c1)-[:AIHound_StoredIn]->(f1:AIHound_ConfigFile),\n      path3 = (c2)-[:AIHound_StoredIn]->(f2:AIHound_ConfigFile)\nRETURN path1, path2, path3",
+    "revision": 1,
+    "resources": ["https://github.com/netwrix/AIHound"],
+    "acknowledgements": ["AIHound"]
+  },
+  {
+    "name": "AIHound - Credential Rotation - PERPLEXITY key dependencies",
+    "queryType": "opengraph",
+    "category": "AIHound",
+    "description": "What breaks if you rotate a PERPLEXITY API key (tool → MCP server → credential dependencies).",
+    "query": "MATCH path = (t:AIHound_AITool)-[:AIHound_UsesMCPServer]->(m:AIHound_MCPServer)-[:AIHound_RequiresCredential]->(c:AIHound_AICredential)\nWHERE c.credential_type CONTAINS \"PERPLEXITY\"\nRETURN path",
+    "revision": 1,
+    "resources": ["https://github.com/netwrix/AIHound"],
+    "acknowledgements": ["AIHound"]
+  },
+  {
+    "name": "AIHound - Credential Rotation - All MCP server credential dependencies",
+    "queryType": "opengraph",
+    "category": "AIHound",
+    "description": "All MCP servers and the credentials they depend on.",
+    "query": "MATCH path = (m:AIHound_MCPServer)-[:AIHound_RequiresCredential]->(c:AIHound_AICredential)\nRETURN path",
+    "revision": 1,
+    "resources": ["https://github.com/netwrix/AIHound"],
+    "acknowledgements": ["AIHound"]
+  },
+  {
+    "name": "AIHound - Cross-Tool - Different tools authenticating to same service",
+    "queryType": "opengraph",
+    "category": "AIHound",
+    "description": "Multiple tools that authenticate to the same service (credential sprawl across tools).",
+    "query": "MATCH path1 = (c1:AIHound_AICredential)-[:AIHound_Authenticates]->(s:AIHound_AIService),\n      path2 = (c2:AIHound_AICredential)-[:AIHound_Authenticates]->(s)\nWHERE c1.tool <> c2.tool\nRETURN path1, path2",
+    "revision": 1,
+    "resources": ["https://github.com/netwrix/AIHound"],
+    "acknowledgements": ["AIHound"]
+  },
+  {
+    "name": "AIHound - Docker Credentials - Docker configs and contents",
+    "queryType": "opengraph",
+    "category": "AIHound",
+    "description": "Docker configuration files and the credentials they contain.",
+    "query": "MATCH path = (d:AIHound_DockerConfig)-[:AIHound_ContainsCredential]->(c:AIHound_AICredential)\nRETURN path",
+    "revision": 1,
+    "resources": ["https://github.com/netwrix/AIHound"],
+    "acknowledgements": ["AIHound"]
+  },
+  {
+    "name": "AIHound - Network Attack Surface - Unauthenticated AI services",
+    "queryType": "opengraph",
+    "category": "AIHound",
+    "description": "Network-exposed AI services (Ollama, LM Studio, Jupyter on 0.0.0.0). Only returns results if exposed services were found.",
+    "query": "OPTIONAL MATCH path = (n:AIHound_NetworkEndpoint)-[:AIHound_ExposesService]->(s:AIHound_AIService)\nRETURN path",
+    "revision": 1,
+    "resources": ["https://github.com/netwrix/AIHound"],
+    "acknowledgements": ["AIHound"]
+  },
+  {
+    "name": "AIHound - Shell History - Shell history credential chains",
+    "queryType": "opengraph",
+    "category": "AIHound",
+    "description": "Credentials leaked in shell history files and the services they authenticate to.",
+    "query": "OPTIONAL MATCH path = (h:AIHound_ShellHistory)-[:AIHound_ContainsCredential]->(c:AIHound_AICredential)-[:AIHound_Authenticates]->(s:AIHound_AIService)\nRETURN path",
+    "revision": 1,
+    "resources": ["https://github.com/netwrix/AIHound"],
+    "acknowledgements": ["AIHound"]
+  },
+  {
+    "name": "AIHound - Git Credentials - Git credential contents",
+    "queryType": "opengraph",
+    "category": "AIHound",
+    "description": "Git credential files and the credentials they contain.",
+    "query": "OPTIONAL MATCH path = (g:AIHound_GitCredential)-[:AIHound_ContainsCredential]->(c:AIHound_AICredential)\nRETURN path",
+    "revision": 1,
+    "resources": ["https://github.com/netwrix/AIHound"],
+    "acknowledgements": ["AIHound"]
+  },
+  {
+    "name": "AIHound - Table - Most dangerous files by credential count",
+    "queryType": "opengraph",
+    "category": "AIHound",
+    "description": "Files ranked by number of credentials they contain. Use BloodHound's table view toggle.",
+    "query": "MATCH (f:AIHound_ConfigFile)-[:AIHound_ContainsCredential]->(c:AIHound_AICredential)\nRETURN f.path AS file, f.file_permissions AS permissions, COUNT(c) AS credential_count\nORDER BY credential_count DESC",
+    "revision": 1,
+    "resources": ["https://github.com/netwrix/AIHound"],
+    "acknowledgements": ["AIHound"]
+  },
+  {
+    "name": "AIHound - Table - Risk distribution",
+    "queryType": "opengraph",
+    "category": "AIHound",
+    "description": "Count of credentials by risk level. Use BloodHound's table view toggle.",
+    "query": "MATCH (c:AIHound_AICredential)\nRETURN c.risk_level AS risk, COUNT(c) AS count\nORDER BY count DESC",
+    "revision": 1,
+    "resources": ["https://github.com/netwrix/AIHound"],
+    "acknowledgements": ["AIHound"]
+  },
+  {
+    "name": "AIHound - Table - Services by credential exposure",
+    "queryType": "opengraph",
+    "category": "AIHound",
+    "description": "Services ranked by number of credentials that authenticate to them. Use BloodHound's table view toggle.",
+    "query": "MATCH (c:AIHound_AICredential)-[:AIHound_Authenticates]->(s:AIHound_AIService)\nRETURN s.name AS service, COUNT(c) AS credentials,\n       COLLECT(DISTINCT c.risk_level) AS risk_levels\nORDER BY credentials DESC",
+    "revision": 1,
+    "resources": ["https://github.com/netwrix/AIHound"],
+    "acknowledgements": ["AIHound"]
+  },
+  {
+    "name": "AIHound - Table - Node type counts",
+    "queryType": "opengraph",
+    "category": "AIHound",
+    "description": "Count of each AIHound node type. Use BloodHound's table view toggle.",
+    "query": "MATCH (n:AIHound)\nRETURN n.primarykind AS node_type, COUNT(n) AS count\nORDER BY count DESC",
+    "revision": 1,
+    "resources": ["https://github.com/netwrix/AIHound"],
+    "acknowledgements": ["AIHound"]
+  },
+  {
+    "name": "AIHound - Table - All critical credentials with remediation",
+    "queryType": "opengraph",
+    "category": "AIHound",
+    "description": "All critical-risk credentials with tool, location, permissions, and remediation steps. Use BloodHound's table view toggle.",
+    "query": "MATCH (c:AIHound_AICredential)\nWHERE c.risk_level = \"critical\"\nRETURN c.name AS credential, c.tool AS tool, c.location AS location,\n       c.file_permissions AS permissions, c.remediation AS fix",
+    "revision": 1,
+    "resources": ["https://github.com/netwrix/AIHound"],
+    "acknowledgements": ["AIHound"]
+  },
+  {
+    "name": "AIHound - Table - Overly permissive files (detailed)",
+    "queryType": "opengraph",
+    "category": "AIHound",
+    "description": "Files with non-0600 permissions and their credential details. Use BloodHound's table view toggle.",
+    "query": "MATCH (f:AIHound_ConfigFile)-[:AIHound_ContainsCredential]->(c:AIHound_AICredential)\nWHERE c.file_permissions IS NOT NULL AND NOT c.file_permissions = \"0600\"\nRETURN f.path AS file, c.name AS credential,\n       c.file_permissions AS permissions, c.risk_level AS risk\nORDER BY c.risk_level",
+    "revision": 1,
+    "resources": ["https://github.com/netwrix/AIHound"],
+    "acknowledgements": ["AIHound"]
+  },
+  {
+    "name": "AIHound - Table - Credentials with expiry dates",
+    "queryType": "opengraph",
+    "category": "AIHound",
+    "description": "Credentials that have expiry dates. Use BloodHound's table view toggle.",
+    "query": "MATCH (c:AIHound_AICredential)\nWHERE c.expiry IS NOT NULL\nRETURN c.name AS credential, c.tool AS tool, c.expiry AS expires",
+    "revision": 1,
+    "resources": ["https://github.com/netwrix/AIHound"],
+    "acknowledgements": ["AIHound"]
+  }
+]

@@ -1,0 +1,223 @@
+{
+  "schema": {
+    "name": "AIHound",
+    "display_name": "AIHound - AI Credential & Secrets Scanner",
+    "version": "v3.2.2",
+    "namespace": "AIHound"
+  },
+  "node_kinds": [
+    {
+      "name": "AIHound_Environment",
+      "display_name": "AIHound Environment",
+      "description": "AIHound scan environment",
+      "is_display_kind": false
+    },
+    {
+      "name": "AIHound_AICredential",
+      "display_name": "AI API key, OAuth token, or session credential",
+      "description": "AI API key, OAuth token, or session credential",
+      "is_display_kind": true,
+      "icon": "key",
+      "color": "#e74c3c"
+    },
+    {
+      "name": "AIHound_AIService",
+      "display_name": "AI platform or service (OpenAI, Anthropic, AWS, etc.)",
+      "description": "AI platform or service (OpenAI, Anthropic, AWS, etc.)",
+      "is_display_kind": true,
+      "icon": "cloud",
+      "color": "#3498db"
+    },
+    {
+      "name": "AIHound_MCPServer",
+      "display_name": "Model Context Protocol server instance",
+      "description": "Model Context Protocol server instance",
+      "is_display_kind": true,
+      "icon": "plug",
+      "color": "#9b59b6"
+    },
+    {
+      "name": "AIHound_ConfigFile",
+      "display_name": "Configuration file containing AI credentials",
+      "description": "Configuration file containing AI credentials",
+      "is_display_kind": true,
+      "icon": "file-lines",
+      "color": "#e67e22"
+    },
+    {
+      "name": "AIHound_EnvVariable",
+      "display_name": "Environment variable holding a secret",
+      "description": "Environment variable holding a secret",
+      "is_display_kind": true,
+      "icon": "terminal",
+      "color": "#27ae60"
+    },
+    {
+      "name": "AIHound_AITool",
+      "display_name": "AI coding assistant or tool (Claude Code, Cursor, etc.)",
+      "description": "AI coding assistant or tool (Claude Code, Cursor, etc.)",
+      "is_display_kind": true,
+      "icon": "wrench",
+      "color": "#1abc9c"
+    },
+    {
+      "name": "AIHound_NetworkEndpoint",
+      "display_name": "Network-exposed AI service endpoint",
+      "description": "Network-exposed AI service endpoint",
+      "is_display_kind": true,
+      "icon": "globe",
+      "color": "#c0392b"
+    },
+    {
+      "name": "AIHound_DataStore",
+      "display_name": "Accessible data (conversation history, models, training data)",
+      "description": "Accessible data (conversation history, models, training data)",
+      "is_display_kind": true,
+      "icon": "database",
+      "color": "#f39c12"
+    },
+    {
+      "name": "AIHound_CredentialStore",
+      "display_name": "OS credential store (macOS Keychain, Windows Credential Manager)",
+      "description": "OS credential store (macOS Keychain, Windows Credential Manager)",
+      "is_display_kind": true,
+      "icon": "lock",
+      "color": "#95a5a6"
+    },
+    {
+      "name": "AIHound_ShellHistory",
+      "display_name": "Shell history file containing leaked credentials",
+      "description": "Shell history file containing leaked credentials",
+      "is_display_kind": true,
+      "icon": "scroll",
+      "color": "#f1c40f"
+    },
+    {
+      "name": "AIHound_DockerConfig",
+      "display_name": "Docker daemon configuration with registry auth",
+      "description": "Docker daemon configuration with registry auth",
+      "is_display_kind": true,
+      "icon": "cube",
+      "color": "#2980b9"
+    },
+    {
+      "name": "AIHound_BrowserSession",
+      "display_name": "Browser cookie or localStorage session for AI service",
+      "description": "Browser cookie or localStorage session for AI service",
+      "is_display_kind": true,
+      "icon": "window-maximize",
+      "color": "#00bcd4"
+    },
+    {
+      "name": "AIHound_GitCredential",
+      "display_name": "Git credential helper or .git-credentials entry",
+      "description": "Git credential helper or .git-credentials entry",
+      "is_display_kind": true,
+      "icon": "code-branch",
+      "color": "#d35400"
+    },
+    {
+      "name": "AIHound_JupyterInstance",
+      "display_name": "Jupyter notebook server instance",
+      "description": "Jupyter notebook server instance",
+      "is_display_kind": true,
+      "icon": "book",
+      "color": "#e67e22"
+    }
+  ],
+  "relationship_kinds": [
+    {
+      "name": "AIHound_Authenticates",
+      "description": "Credential authenticates to a service",
+      "is_traversable": true
+    },
+    {
+      "name": "AIHound_StoredIn",
+      "description": "Credential is stored in a file or store",
+      "is_traversable": true
+    },
+    {
+      "name": "AIHound_ContainsCredential",
+      "description": "File or store contains a credential",
+      "is_traversable": true
+    },
+    {
+      "name": "AIHound_ReadsFrom",
+      "description": "Tool reads from a config file",
+      "is_traversable": true
+    },
+    {
+      "name": "AIHound_GrantsAccessTo",
+      "description": "Service grants access to a data store",
+      "is_traversable": true
+    },
+    {
+      "name": "AIHound_ExposesService",
+      "description": "Network endpoint exposes an AI service",
+      "is_traversable": true
+    },
+    {
+      "name": "AIHound_UsesMCPServer",
+      "description": "Tool uses an MCP server",
+      "is_traversable": true
+    },
+    {
+      "name": "AIHound_RequiresCredential",
+      "description": "MCP server requires a credential",
+      "is_traversable": true
+    },
+    {
+      "name": "AIHound_ConfiguredBy",
+      "description": "MCP server configured by a config file",
+      "is_traversable": true
+    },
+    {
+      "name": "AIHound_InheritsEnv",
+      "description": "MCP server inherits an environment variable",
+      "is_traversable": true
+    },
+    {
+      "name": "AIHound_BrowserAuthTo",
+      "description": "Browser session authenticates to a service",
+      "is_traversable": true
+    },
+    {
+      "name": "AIHound_DockerRegistryAuth",
+      "description": "Docker config authenticates to a registry",
+      "is_traversable": true
+    },
+    {
+      "name": "AIHound_GitAuthTo",
+      "description": "Git credential authenticates to a service",
+      "is_traversable": true
+    },
+    {
+      "name": "AIHound_SameSecret",
+      "description": "Two credentials share the same secret value",
+      "is_traversable": true
+    }
+  ],
+  "environments": [
+    {
+      "environment_kind": "AIHound_Environment",
+      "source_kind": "AIHound",
+      "principal_kinds": [
+        "AIHound_AICredential",
+        "AIHound_AIService",
+        "AIHound_MCPServer",
+        "AIHound_ConfigFile",
+        "AIHound_EnvVariable",
+        "AIHound_AITool",
+        "AIHound_NetworkEndpoint",
+        "AIHound_DataStore",
+        "AIHound_CredentialStore",
+        "AIHound_ShellHistory",
+        "AIHound_DockerConfig",
+        "AIHound_BrowserSession",
+        "AIHound_GitCredential",
+        "AIHound_JupyterInstance"
+      ]
+    }
+  ],
+  "relationship_findings": []
+}
