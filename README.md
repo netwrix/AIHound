@@ -40,7 +40,6 @@ AIHound can export to **SpectorOps' BloodHound**. Scan results export as OpenGra
 Get scanning in under 2 minutes.
 
 ## **PyInstaller Precompiled .exe version can be found [Here](https://github.com/netwrix/AIHound/tree/main/Other%20Versions/pyinstaller/dist)**
-## **Go Precompiled .exe version can be found [Here](https://github.com/netwrix/AIHound/tree/main/Other%20Versions/Go/dist)**
 
 AIHound can be run four ways: from Python source, using the Go runtime. as a compiled Go binary, or as a standalone Windows executable.
 
