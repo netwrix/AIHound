@@ -144,32 +144,34 @@ python3 -m aihound --bloodhound aihound-bloodhound.json
 
 Then upload `aihound-bloodhound.json` to BloodHound CE (v9.x) via **Quick Upload** or **Data Collection > File Ingest**.
 
-**First time?** Register custom node types and saved Cypher queries (once per BloodHound instance):
->register_ai_nodes.py script located in docs folder.
+**First time?** Register the extension schema and import saved Cypher queries (once per BloodHound instance):
 
 ```bash
-python3 docs/register_ai_nodes.py -s http://<bloodhound IP>:8080 -u admin -p <password>
+python3 -m aihound --import-queries \
+  --bloodhound-server http://<bloodhound IP>:8080 \
+  --bloodhound-user admin \
+  --bloodhound-password <password>
 ```
 
-This registers 14 custom node kinds with icons and imports 29 saved Cypher queries into BloodHound's Saved Queries panel. Use `--reset` to re-register, `--unregister` to remove everything, or `--no-queries` to skip query import.
+This registers 14 custom node kinds with icons/colors via the OpenGraph extension schema and imports 29 saved Cypher queries into BloodHound's Saved Queries panel. Running it again is safe — it skips existing queries and re-registers the schema.
 
-Example Cypher queries (also available in Saved Queries after registration):
+Example Cypher queries (also available in Saved Queries after import):
 
 ```cypher
 // Show the full credential graph
 MATCH path = (a:AIHound)-[r]->(b:AIHound) RETURN path
 
 // Blast radius from critical credentials
-MATCH path = (c:AICredential)-[*1..4]->(target)
+MATCH path = (c:AIHound_AICredential)-[*1..4]->(target)
 WHERE c.risk_level = "critical"
 RETURN path
 
 // MCP server attack chain: tool -> server -> credential -> service
-MATCH path = (t:AITool)-[:UsesMCPServer]->(m:MCPServer)-[:RequiresCredential]->(c:AICredential)-[:Authenticates]->(s:AIService)
+MATCH path = (t:AIHound_AITool)-[:AIHound_UsesMCPServer]->(m:AIHound_MCPServer)-[:AIHound_RequiresCredential]->(c:AIHound_AICredential)-[:AIHound_Authenticates]->(s:AIHound_AIService)
 RETURN path
 ```
 
-See `BLOODHOUND_GUIDE.md` located [Here](https://github.com/netwrix/AIHound/tree/main/docs) for the full walkthrough and `cypher_queries.cy` for all 29 pre-built queries.
+See `BLOODHOUND_GUIDE.md` located [Here](https://github.com/netwrix/AIHound/tree/main/docs) for the full walkthrough and `extension/queries.json` for all 29 pre-built queries in [SpecterOps Query Library format](https://queries.specterops.io).
 
 <img width="1768" height="937" alt="Screenshot 2026-05-12 135945" src="https://github.com/user-attachments/assets/72d00b53-662b-40a4-be8d-cd95be86eee7" />
 
