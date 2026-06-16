@@ -74,6 +74,8 @@ hidden_imports = [
     'aihound.output.json_export',
     'aihound.output.html_report',
     'aihound.output.opengraph_export',
+    # BloodHound API client
+    'aihound.bloodhound',
     # Utility modules
     'aihound.utils',
     'aihound.utils.keychain',
@@ -85,11 +87,18 @@ hidden_imports = [
     'sqlite3',
 ]
 
-# Data files - bundle aihound.png if it exists
+# Data files - bundle aihound.png and extension/ JSON files
 datas = []
 icon_path = os.path.join(project_root, 'aihound.png')
 if os.path.exists(icon_path):
     datas.append((icon_path, '.'))
+
+# Bundle extension schema and queries for --import-queries support
+extension_dir = os.path.join(project_root, 'extension')
+for fname in ('schema.json', 'queries.json'):
+    fpath = os.path.join(extension_dir, fname)
+    if os.path.exists(fpath):
+        datas.append((fpath, 'extension'))
 
 a = Analysis(
     [entry_point],
