@@ -404,20 +404,25 @@ ConfigFile (.credentials.json)
 
 ### Setup
 
-**1. Register custom node types and saved queries** (once per BloodHound instance):
+**1. Register extension schema and import saved queries** (once per BloodHound instance):
 
 ```bash
-python3 docs/register_ai_nodes.py -s http://localhost:8080 -u admin -p <password>
+python3 -m aihound --import-queries \
+  --bloodhound-server http://localhost:8080 \
+  --bloodhound-user admin \
+  --bloodhound-password <password>
 ```
 
-This registers 14 custom node kinds with Font Awesome icons and imports 29 pre-built Cypher queries into BloodHound's **Saved Queries** panel.
+This registers 14 custom node kinds with icons/colors via the OpenGraph extension schema (`extension/schema.json`) and imports 29 saved Cypher queries from `extension/queries.json`. Running it again is safe — it skips existing queries and re-registers the schema.
 
 | Flag | Description |
 |------|-------------|
-| *(no flags)* | Register node kinds + saved queries (skips if already exist) |
-| `--reset` | Delete all AIHound node kinds and saved queries, then re-register |
-| `--unregister` | Remove all AIHound node kinds and saved queries |
-| `--no-queries` | Skip importing saved Cypher queries |
+| `--bloodhound-server URL` | BloodHound CE server URL (required) |
+| `--bloodhound-user USER` | BloodHound username (use with `--bloodhound-password`) |
+| `--bloodhound-password PASS` | BloodHound password |
+| `--bloodhound-token-id UUID` | API token ID (alternative to username/password) |
+| `--bloodhound-token-key KEY` | API token key |
+| `--queries-file PATH` | Custom queries JSON file (default: bundled `extension/queries.json`) |
 | `--no-verify-ssl` | Disable SSL certificate verification |
 
 **2. Run scan and export:**
@@ -428,32 +433,32 @@ aihound --bloodhound output.json
 
 **3. Upload** `output.json` to BloodHound CE via Quick Upload.
 
-**4. Query attack paths** — open the **Saved Queries** panel in the Cypher tab and search "AIHound", or paste from `cypher_queries.cy`:
+**4. Query attack paths** — open the **Saved Queries** panel in the Cypher tab and search "AIHound", or paste queries manually:
 
 ```cypher
 // Full graph — all AI credential relationships
 MATCH path = (a:AIHound)-[r]->(b:AIHound) RETURN path
 
 // Blast radius from critical credentials
-MATCH path = (c:AICredential)-[*1..4]->(target)
+MATCH path = (c:AIHound_AICredential)-[*1..4]->(target)
 WHERE c.risk_level = "critical"
 RETURN path
 
 // MCP server attack chain
-MATCH path = (t:AITool)-[:UsesMCPServer]->(m:MCPServer)-[:RequiresCredential]->(c:AICredential)-[:Authenticates]->(s:AIService)
+MATCH path = (t:AIHound_AITool)-[:AIHound_UsesMCPServer]->(m:AIHound_MCPServer)-[:AIHound_RequiresCredential]->(c:AIHound_AICredential)-[:AIHound_Authenticates]->(s:AIHound_AIService)
 RETURN path
 
 // Same secret in multiple locations
-MATCH path = (c1:AICredential)-[:SameSecret]->(c2:AICredential)
+MATCH path = (c1:AIHound_AICredential)-[:AIHound_SameSecret]->(c2:AIHound_AICredential)
 RETURN path
 
 // What breaks if I rotate this key?
-MATCH path = (t:AITool)-[:UsesMCPServer]->(m:MCPServer)-[:RequiresCredential]->(c:AICredential)
+MATCH path = (t:AIHound_AITool)-[:AIHound_UsesMCPServer]->(m:AIHound_MCPServer)-[:AIHound_RequiresCredential]->(c:AIHound_AICredential)
 WHERE c.credential_type CONTAINS "PERPLEXITY"
 RETURN path
 ```
 
-See `BLOODHOUND_GUIDE.md` for the full step-by-step walkthrough. All 29 queries from `cypher_queries.cy` are auto-imported into BloodHound's Saved Queries when you run `register_ai_nodes.py`.
+See `BLOODHOUND_GUIDE.md` for the full step-by-step walkthrough. The queries follow the [SpecterOps Query Library format](https://queries.specterops.io) — all 29 are in `extension/queries.json`.
 
 ---
 
@@ -482,6 +487,14 @@ All flags are the same across all three versions:
 | `--min-risk LEVEL` | Minimum risk to emit as watch events (default: `info`) |
 | `--debounce SECONDS` | Suppress duplicate events within window (default: 10) |
 | `--mcp` | Run as MCP stdio server (requires `pip install aihound[mcp]`) |
+| `--import-queries` | Register schema and import saved queries into BloodHound CE, then exit |
+| `--bloodhound-server URL` | BloodHound CE server URL (for `--import-queries`) |
+| `--bloodhound-user USER` | BloodHound username |
+| `--bloodhound-password PASS` | BloodHound password |
+| `--bloodhound-token-id UUID` | BloodHound API token ID |
+| `--bloodhound-token-key KEY` | BloodHound API token key |
+| `--queries-file PATH` | Custom queries JSON file (default: `extension/queries.json`) |
+| `--no-verify-ssl` | Disable SSL certificate verification for BloodHound connection |
 
 ---
 
@@ -884,10 +897,15 @@ aihound/
 │   ├── json_export.py       # JSON report
 │   ├── html_report.py       # Self-contained HTML report with embedded banner
 │   └── opengraph_export.py  # BloodHound CE OpenGraph JSON export
+├── bloodhound.py        # BloodHound CE API client (schema registration + query import)
 └── utils/
     ├── keychain.py      # macOS Keychain queries
     ├── credman.py       # Windows Credential Manager queries
     └── vscdb.py         # VS Code SQLite state.vscdb reader
+
+extension/
+├── schema.json          # OpenGraph extension schema (node kinds, icons, colors, relationships)
+└── queries.json         # 29 pre-built Cypher queries in SpecterOps Query Library format
 ```
 
 ---
