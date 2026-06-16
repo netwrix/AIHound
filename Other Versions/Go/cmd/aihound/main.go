@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"aihound/bloodhound"
 	"aihound/core"
 	"aihound/mcpserver"
 	"aihound/output"
@@ -51,6 +52,16 @@ var (
 
 	// BloodHound export flag
 	flagBloodHound = pflag.String("bloodhound", "", "Write BloodHound CE OpenGraph JSON to file (for attack path visualization)")
+
+	// BloodHound query import flags
+	flagImportQueries    = pflag.Bool("import-queries", false, "Register schema and import saved queries into BloodHound CE, then exit")
+	flagBHServer         = pflag.String("bloodhound-server", "", "BloodHound CE server URL (e.g., http://localhost:8080)")
+	flagBHUser           = pflag.String("bloodhound-user", "", "BloodHound username")
+	flagBHPassword       = pflag.String("bloodhound-password", "", "BloodHound password")
+	flagBHTokenID        = pflag.String("bloodhound-token-id", "", "BloodHound API token ID (UUID)")
+	flagBHTokenKey       = pflag.String("bloodhound-token-key", "", "BloodHound API token key")
+	flagQueriesFile      = pflag.String("queries-file", "", "Custom queries JSON file (default: bundled extension/queries.json)")
+	flagNoVerifySSL      = pflag.Bool("no-verify-ssl", false, "Disable SSL certificate verification for BloodHound connection")
 )
 
 func parseRiskLevel(s string) (core.RiskLevel, error) {
@@ -84,6 +95,11 @@ func main() {
 	// for JSON-RPC.
 	if *flagMCP {
 		os.Exit(runMCPMode())
+	}
+
+	// --import-queries: register schema + import queries into BloodHound CE, then exit
+	if *flagImportQueries {
+		os.Exit(runImportQueries())
 	}
 
 	allScanners := scanners.GetAll()
@@ -359,5 +375,67 @@ func runMCPMode() int {
 		fmt.Fprintf(os.Stderr, "MCP server error: %v\n", err)
 		return 1
 	}
+	return 0
+}
+
+// runImportQueries implements --import-queries. Registers the AIHound extension
+// schema and imports saved queries into a BloodHound CE instance.
+func runImportQueries() int {
+	if *flagBHServer == "" {
+		fmt.Fprintln(os.Stderr, "ERROR: --import-queries requires --bloodhound-server")
+		return 1
+	}
+
+	hasPassword := *flagBHUser != "" && *flagBHPassword != ""
+	hasToken := *flagBHTokenID != "" && *flagBHTokenKey != ""
+	if !hasPassword && !hasToken {
+		fmt.Fprintln(os.Stderr, "ERROR: Provide either --bloodhound-user/--bloodhound-password or --bloodhound-token-id/--bloodhound-token-key")
+		return 1
+	}
+
+	// Load schema and queries
+	schema, err := bloodhound.LoadSchema("")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: Failed to load schema: %v\n", err)
+		return 1
+	}
+
+	queriesPath := *flagQueriesFile
+	queries, err := bloodhound.LoadQueries(queriesPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: Failed to load queries: %v\n", err)
+		return 1
+	}
+
+	client := bloodhound.NewClient(*flagBHServer, !*flagNoVerifySSL)
+
+	// Authenticate
+	if hasPassword {
+		if err := client.LoginPassword(*flagBHUser, *flagBHPassword); err != nil {
+			fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
+			return 1
+		}
+	} else {
+		if err := client.LoginToken(*flagBHTokenID, *flagBHTokenKey); err != nil {
+			fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
+			return 1
+		}
+	}
+
+	// Register schema
+	if err := client.RegisterSchema(schema); err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: Failed to register schema: %v\n", err)
+		return 1
+	}
+	fmt.Println("Registered AIHound extension schema (node kinds, icons, colors)")
+
+	// Import queries
+	created, skipped, err := client.ImportQueries(queries)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: Failed to import queries: %v\n", err)
+		return 1
+	}
+	fmt.Printf("Saved queries: %d created, %d already existed\n", created, skipped)
+
 	return 0
 }
